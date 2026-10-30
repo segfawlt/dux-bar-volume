@@ -1,7 +1,7 @@
 {
   "id": "barVolume",
-  "name": "Bar Volume",
-  "description": "Control system volume, mute, and monitor brightness by hovering and scrolling over any bar with per-bar widget checklists",
+  "name": "Bar Volume Control",
+  "description": "Control the system volume and monitor brightness by scrolling over the bar",
   "version": "1.0.0",
   "author": "segfawlt",
   "license": "GPL-3.0",
