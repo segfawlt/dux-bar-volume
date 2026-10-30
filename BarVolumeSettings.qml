@@ -142,6 +142,13 @@ PluginSettings {
             return result;
 
         const isIsland = barConfig.island === true;
+        if (byId["__empty__"]) {
+            if (isIsland) {
+                byId["__empty__"].description = "Empty space inside satellite widget clusters (gaps outside clusters pass through to windows)";
+            } else if (barConfig.clickThrough === true) {
+                byId["__empty__"].description = "Empty space inside widget sections (Click-through is enabled on this bar, so open gaps pass through)";
+            }
+        }
         const allowSatellites = !isIsland || satellitesEnabled !== false;
 
         const scanList = (rawList, sectionLabel) => {
@@ -256,7 +263,7 @@ PluginSettings {
         const wins = Array.isArray(barWindows) ? barWindows : [];
         for (let i = 0; i < wins.length; i++) {
             const w = wins[i];
-            if (!w || (w.barConfig?.id || "default") !== barId)
+            if (!w || w.dot === true || w.free === true || (w.barConfig?.id || "default") !== barId)
                 continue;
             addDisplay(w.screen?.name || "", w.screen?.model || "");
         }
@@ -349,16 +356,18 @@ PluginSettings {
         spacing: Theme.spacingS
 
         function snapValue(raw) {
-            const num = Number(raw);
-            if (isNaN(num))
-                return defaultValue;
             const st = Math.max(1, stepSize);
+            let num = Number(raw);
+            if (isNaN(num))
+                num = Number(defaultValue);
+            if (isNaN(num))
+                num = minimum;
             const snapped = st > 1 ? (minimum + Math.round((num - minimum) / st) * st) : Math.round(num);
             return Math.max(minimum, Math.min(maximum, snapped));
         }
 
         function loadValue() {
-            if (!root.pluginService)
+            if (!root.pluginService || sliderControl.isDragging)
                 return;
             const raw = root.loadValue(settingKey, defaultValue);
             const clean = snapValue(raw);
@@ -389,6 +398,7 @@ PluginSettings {
         }
 
         DSlider {
+            id: sliderControl
             upDownKeysStep: false
             width: parent.width
             value: steppedRoot.value
@@ -465,7 +475,7 @@ PluginSettings {
             }
 
             Column {
-                width: Math.max(80, parent.width - checkIndicator.width - zoneIcon.width - sectionBadge.width - Theme.spacingM * 3)
+                width: Math.max(80, parent.width - checkIndicator.width - zoneIcon.width - (sectionBadge.visible ? sectionBadge.width + Theme.spacingM : 0) - Theme.spacingM * 2)
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 2
 
@@ -549,6 +559,11 @@ PluginSettings {
             currentBinding = normalized;
             root.saveValue(settingKey, normalized);
             if (root.recordingKey === settingKey)
+                root.recordingKey = "";
+        }
+
+        onVisibleChanged: {
+            if (!visible && isRecording)
                 root.recordingKey = "";
         }
 
@@ -821,7 +836,9 @@ PluginSettings {
         id: ccBrightnessToggle
         settingKey: "controlCenterBrightnessEnabled"
         label: "Scroll Brightness on Control Center"
-        description: "Hovering the Control Center widget adjusts display brightness for that monitor instead of volume"
+        description: BrightnessService.brightnessAvailable
+            ? "Hovering the Control Center widget adjusts display brightness for that monitor instead of volume"
+            : "Hovering the Control Center widget adjusts display brightness (no controllable brightness device detected)"
         defaultValue: true
     }
 
@@ -1046,7 +1063,7 @@ PluginSettings {
             width: parent.width
             spacing: Theme.spacingS
 
-            Row {
+            Flow {
                 width: parent.width
                 spacing: Theme.spacingS
 
@@ -1176,7 +1193,7 @@ PluginSettings {
                             }
                         }
 
-                        Row {
+                        Flow {
                             visible: !barCard.collapsed
                             width: parent.width
                             spacing: Theme.spacingS
@@ -1268,7 +1285,7 @@ PluginSettings {
             const wins = KeyboardFocus.barWindows || [];
             for (let i = 0; i < wins.length; i++) {
                 const w = wins[i];
-                if (!w || !w.barConfig)
+                if (!w || w.dot === true || w.free === true || !root.isBarConfigEligible(w.barConfig))
                     continue;
                 const bId = w.barConfig.id || "default";
                 const bName = w.barConfig.name || bId;
@@ -1287,7 +1304,7 @@ PluginSettings {
                 for (let b = 0; b < bIds.length; b++) {
                     const body = perBar[bIds[b]];
                     const cfg = body?.barConfig;
-                    if (cfg)
+                    if (cfg && root.isBarConfigEligible(cfg))
                         addTarget(cfg.id || bIds[b], cfg.name || bIds[b], sName, body?.screen?.model ?? "");
                 }
             }

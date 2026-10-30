@@ -2,8 +2,9 @@
   "id": "barVolume",
   "name": "Bar Volume",
   "description": "Control system volume, mute, and monitor brightness by hovering and scrolling over any bar with per-bar widget checklists",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "author": "segfawlt",
+  "license": "GPL-3.0",
   "type": "daemon",
   "capabilities": [
     "daemon",

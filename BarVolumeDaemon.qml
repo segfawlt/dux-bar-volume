@@ -150,16 +150,55 @@ Scope {
     }
     readonly property bool playFeedbackSound: pluginData.playFeedbackSound !== false
 
-    // Pending PipeWire volume write tracking (prevents dropped scroll detents)
+    // Pending PipeWire volume write tracking & overdrive max-volume sync
     property var pendingVolumeWrites: []
     property bool writingVolume: false
     property double lastWriteTimeMs: 0
     property double lastPluginOsdActionMs: 0
+    property string lastPluginOsdKind: "volume"
+    property var savedSinkMaxVolumes: ({})
 
     // Managed overlay instances across active bar surfaces
     property var activeOverlays: []
     readonly property string cacheBustQuery: "?rev=" + Date.now()
     property var overlayComp: null
+
+    function syncOverdriveMaxVolume() {
+        const sinkName = AudioService.sink?.name ?? "";
+        if (!sinkName || typeof SessionData.setDeviceMaxVolume !== "function" || typeof SessionData.getDeviceMaxVolume !== "function")
+            return;
+
+        if (overrideMaxVolume && customMaxVolume > 100) {
+            if (savedSinkMaxVolumes[sinkName] === undefined) {
+                const nextSaved = Object.assign({}, savedSinkMaxVolumes);
+                nextSaved[sinkName] = SessionData.getDeviceMaxVolume(sinkName);
+                savedSinkMaxVolumes = nextSaved;
+            }
+            if (SessionData.getDeviceMaxVolume(sinkName) < customMaxVolume)
+                SessionData.setDeviceMaxVolume(sinkName, customMaxVolume);
+        } else if (savedSinkMaxVolumes[sinkName] !== undefined) {
+            const prevMax = savedSinkMaxVolumes[sinkName];
+            const nextSaved = Object.assign({}, savedSinkMaxVolumes);
+            delete nextSaved[sinkName];
+            savedSinkMaxVolumes = nextSaved;
+            SessionData.setDeviceMaxVolume(sinkName, prevMax);
+        }
+    }
+
+    function restoreAllSavedSinkMaxVolumes() {
+        if (typeof SessionData.setDeviceMaxVolume !== "function")
+            return;
+        const names = Object.keys(savedSinkMaxVolumes || {});
+        for (let i = 0; i < names.length; i++) {
+            const name = names[i];
+            if (savedSinkMaxVolumes[name] !== undefined)
+                SessionData.setDeviceMaxVolume(name, savedSinkMaxVolumes[name]);
+        }
+        savedSinkMaxVolumes = {};
+    }
+
+    onOverrideMaxVolumeChanged: syncOverdriveMaxVolume()
+    onCustomMaxVolumeChanged: syncOverdriveMaxVolume()
 
     Timer {
         id: resyncTimer
@@ -185,6 +224,13 @@ Scope {
     }
 
     Connections {
+        target: SettingsData
+        function onBarConfigsChanged() {
+            resyncTimer.restart();
+        }
+    }
+
+    Connections {
         target: Quickshell
         function onScreensChanged() {
             resyncTimer.restart();
@@ -195,6 +241,7 @@ Scope {
         target: AudioService
         function onSinkChanged() {
             root.pendingVolumeWrites = [];
+            root.syncOverdriveMaxVolume();
         }
     }
 
@@ -202,7 +249,7 @@ Scope {
         id: osdDurationSyncTimer
         interval: 25
         repeat: false
-        onTriggered: root.applyActiveOsdDuration()
+        onTriggered: root.applyActiveOsdDuration(root.lastPluginOsdKind)
     }
 
     Connections {
@@ -210,10 +257,10 @@ Scope {
         ignoreUnknownSignals: true
         function onVolumeChanged() {
             if (root.showOsd && (Date.now() - root.lastPluginOsdActionMs) < 800) {
-                Qt.callLater(root.applyActiveOsdDuration);
+                Qt.callLater(() => root.applyActiveOsdDuration("volume"));
                 osdDurationSyncTimer.restart();
             } else if ((Date.now() - root.lastPluginOsdActionMs) >= 800) {
-                root.restoreDefaultOsdDuration();
+                root.restoreDefaultOsdDuration("volume");
             }
 
             if (root.writingVolume || root.pendingVolumeWrites.length === 0)
@@ -225,10 +272,10 @@ Scope {
 
         function onMutedChanged() {
             if (root.showOsd && (Date.now() - root.lastPluginOsdActionMs) < 800) {
-                Qt.callLater(root.applyActiveOsdDuration);
+                Qt.callLater(() => root.applyActiveOsdDuration("volume"));
                 osdDurationSyncTimer.restart();
             } else if ((Date.now() - root.lastPluginOsdActionMs) >= 800) {
-                root.restoreDefaultOsdDuration();
+                root.restoreDefaultOsdDuration("volume");
             }
         }
     }
@@ -237,10 +284,10 @@ Scope {
         target: BrightnessService
         function onBrightnessChanged(osdShown) {
             if (osdShown && root.showOsd && (Date.now() - root.lastPluginOsdActionMs) < 800) {
-                Qt.callLater(root.applyActiveOsdDuration);
+                Qt.callLater(() => root.applyActiveOsdDuration("brightness"));
                 osdDurationSyncTimer.restart();
             } else if ((Date.now() - root.lastPluginOsdActionMs) >= 800) {
-                root.restoreDefaultOsdDuration();
+                root.restoreDefaultOsdDuration("brightness");
             }
         }
     }
@@ -260,36 +307,18 @@ Scope {
         }
 
         function volumeUp(): string {
-            root.performVolumeStep(1, root.volumeStep);
+            root.performVolumeStep(1, root.volumeStep, "");
             return "ok";
         }
 
         function volumeDown(): string {
-            root.performVolumeStep(-1, root.volumeStep);
+            root.performVolumeStep(-1, root.volumeStep, "");
             return "ok";
         }
 
         function toggleMute(): string {
-            root.performToggleMute();
+            root.performToggleMute("");
             return "ok";
-        }
-
-        function diagnostics(): string {
-            const url = Qt.resolvedUrl("./BarVolumeSettings.qml") + "?diag=" + Date.now();
-            const comp = Qt.createComponent(url);
-            if (comp.status !== Component.Ready)
-                return "SETTINGS_COMPILE_ERROR: " + comp.errorString();
-            const inst = comp.createObject(null, {
-                width: 520,
-                pluginService: root.pluginService
-            });
-            if (!inst)
-                return "SETTINGS_INSTANTIATE_ERROR";
-            const heightVal = Math.round(inst.implicitHeight || inst.height || 0);
-            const h1 = root.resolveBrightnessDevice("HDMI-A-1");
-            const dp3 = root.resolveBrightnessDevice("DP-3");
-            inst.destroy();
-            return `settingsOk=true implicitHeight=${heightVal}px brightDevices=[HDMI-A-1->${h1}, DP-3->${dp3}]`;
         }
     }
 
@@ -324,14 +353,19 @@ Scope {
         return disabledBarTargets.indexOf(key) === -1;
     }
 
-    function applyActiveOsdDuration() {
+    function applyActiveOsdDuration(expectedKind) {
         if (!showOsd)
             return;
         const map = OSDManager.currentOSDsByScreen || {};
         const screens = Object.keys(map);
         for (let i = 0; i < screens.length; i++) {
             const osd = map[screens[i]];
-            if (osd && (osd.osdKind === "volume" || osd.osdKind === "brightness")) {
+            if (!osd)
+                continue;
+            const kindMatch = expectedKind
+                ? osd.osdKind === expectedKind
+                : (osd.osdKind === "volume" || osd.osdKind === "brightness");
+            if (kindMatch) {
                 osd.autoHideInterval = customOsdDurationMs;
                 if (osd.shouldBeVisible && typeof osd.resetHideTimer === "function")
                     osd.resetHideTimer();
@@ -339,14 +373,35 @@ Scope {
         }
     }
 
-    function restoreDefaultOsdDuration() {
+    function showLimitVolumeOsd(screenName) {
+        if (!showOsd || !SettingsData.osdVolumeEnabled)
+            return;
+        const map = OSDManager.currentOSDsByScreen || {};
+        const keys = screenName && map[screenName] ? [screenName] : Object.keys(map);
+        for (let i = 0; i < keys.length; i++) {
+            const osd = map[keys[i]];
+            if (osd && osd.osdKind === "volume") {
+                osd.autoHideInterval = customOsdDurationMs;
+                if (typeof osd.show === "function")
+                    osd.show();
+                else if (osd.shouldBeVisible && typeof osd.resetHideTimer === "function")
+                    osd.resetHideTimer();
+            }
+        }
+    }
+
+    function restoreDefaultOsdDuration(onlyKind) {
         const map = OSDManager.currentOSDsByScreen || {};
         const screens = Object.keys(map);
         for (let i = 0; i < screens.length; i++) {
             const osd = map[screens[i]];
-            if (osd && (osd.osdKind === "volume" || osd.osdKind === "brightness") && osd.autoHideInterval !== 3000) {
+            if (!osd)
+                continue;
+            const kindMatch = onlyKind
+                ? osd.osdKind === onlyKind
+                : (osd.osdKind === "volume" || osd.osdKind === "brightness");
+            if (kindMatch && osd.autoHideInterval !== 3000)
                 osd.autoHideInterval = 3000;
-            }
         }
     }
 
@@ -402,6 +457,7 @@ Scope {
         const nextVal = Math.max(minVal, Math.min(maxVal, currentVal + dirSign * stepVal));
 
         lastPluginOsdActionMs = Date.now();
+        lastPluginOsdKind = "brightness";
         BrightnessService.lastIpcDevice = deviceName;
         if (deviceName !== BrightnessService.currentDevice)
             BrightnessService.setCurrentDevice(deviceName, false);
@@ -409,18 +465,21 @@ Scope {
         BrightnessService.setBrightness(nextVal, deviceName, !showOsd);
 
         if (showOsd) {
-            Qt.callLater(applyActiveOsdDuration);
+            Qt.callLater(() => applyActiveOsdDuration("brightness"));
             osdDurationSyncTimer.restart();
         }
     }
 
-    function performVolumeStep(dirSign, stepAmount) {
+    function performVolumeStep(dirSign, stepAmount, screenName) {
         const audio = AudioService.sink?.audio;
         if (!audio || dirSign === 0)
             return;
 
+        syncOverdriveMaxVolume();
+
         const now = Date.now();
         lastPluginOsdActionMs = now;
+        lastPluginOsdKind = "volume";
         if (now - lastWriteTimeMs > 600)
             pendingVolumeWrites = [];
 
@@ -440,8 +499,7 @@ Scope {
         }
 
         if (nextVol === currentVol) {
-            if (showOsd)
-                applyActiveOsdDuration();
+            showLimitVolumeOsd(screenName);
             return;
         }
 
@@ -452,7 +510,7 @@ Scope {
         pendingVolumeWrites = pendingVolumeWrites.concat([nextVol]).slice(-10);
 
         if (showOsd) {
-            Qt.callLater(applyActiveOsdDuration);
+            Qt.callLater(() => applyActiveOsdDuration("volume"));
             osdDurationSyncTimer.restart();
         }
 
@@ -460,16 +518,17 @@ Scope {
             AudioService.playVolumeChangeSoundIfEnabled();
     }
 
-    function performToggleMute() {
+    function performToggleMute(screenName) {
         const audio = AudioService.sink?.audio;
         if (!audio)
             return;
         lastPluginOsdActionMs = Date.now();
+        lastPluginOsdKind = "volume";
         if (!showOsd)
             SessionData.suppressOSDTemporarily();
         AudioService.toggleMute();
         if (showOsd) {
-            Qt.callLater(applyActiveOsdDuration);
+            Qt.callLater(() => applyActiveOsdDuration("volume"));
             osdDurationSyncTimer.restart();
         }
     }
@@ -504,7 +563,9 @@ Scope {
         const winList = KeyboardFocus.barWindows || [];
         for (let i = 0; i < winList.length; i++) {
             const win = winList[i];
-            const kids = win?.contentItem?.children;
+            if (!win || win.dot === true || win.free === true)
+                continue;
+            const kids = win.contentItem?.children;
             if (!kids)
                 continue;
             for (let j = 0; j < kids.length; j++) {
@@ -536,7 +597,7 @@ Scope {
 
         for (let i = 0; i < activeOverlays.length; i++) {
             const entry = activeOverlays[i];
-            if (entry && entry.body && bodies.indexOf(entry.body) !== -1 && entry.overlay) {
+            if (entry && entry.body && bodies.indexOf(entry.body) !== -1 && entry.overlay && entry.overlay.parent) {
                 kept.push(entry);
             } else if (entry && entry.overlay) {
                 try {
@@ -614,6 +675,7 @@ Scope {
     Component.onCompleted: {
         loadPluginData();
         AudioService.addRef();
+        syncOverdriveMaxVolume();
         syncOverlays();
         resyncTimer.restart();
     }
@@ -621,7 +683,8 @@ Scope {
     Component.onDestruction: {
         resyncTimer.stop();
         osdDurationSyncTimer.stop();
-        restoreDefaultOsdDuration();
+        restoreDefaultOsdDuration("");
+        restoreAllSavedSinkMaxVolumes();
         destroyAllOverlays();
         AudioService.removeRef();
     }

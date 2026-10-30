@@ -19,8 +19,15 @@ MouseArea {
     readonly property bool isVertical: barBody?.isVertical === true
     readonly property int barPos: barBody?.barPos ?? 0
     readonly property var islandHost: barBody?.islandHost ?? null
-    readonly property bool islandExpanded: islandHost?.expanded === true
+    readonly property bool hostsIsland: isIsland || (barBody?.hostsIsland === true) || islandHost !== null
+    readonly property bool islandExpanded: (islandHost?.expanded === true) || (islandHost?.sheetOut === true)
     readonly property bool targetEnabled: daemon ? daemon.isBarTargetEnabled(barId, screenName) : false
+
+    // SettingsData.Position: Top=0, Bottom=1, Left=2, Right=3, TopCenter=4, BottomCenter=5, LeftCenter=6, RightCenter=7
+    readonly property bool isFarCrossEdge: isVertical
+        ? (barPos === 3 || barPos === 7)
+        : (barPos === 1 || barPos === 5)
+    readonly property bool clampToIslandBand: isIsland || (hostsIsland && parent === barBody)
 
     readonly property real islandBandThickness: {
         const baseBand = barUnitInset
@@ -29,12 +36,12 @@ MouseArea {
         if (!islandHost || islandExpanded)
             return Math.max(24, baseBand);
         if (isVertical) {
-            const pillSpan = barPos === 3
+            const pillSpan = isFarCrossEdge
                 ? (parent ? parent.width - islandHost.currentVisualX : baseBand)
                 : (islandHost.currentVisualX + islandHost.currentVisualWidth);
             return Math.max(baseBand, pillSpan);
         }
-        const pillSpan = barPos === 1
+        const pillSpan = isFarCrossEdge
             ? (parent ? parent.height - islandHost.currentVisualY : baseBand)
             : (islandHost.currentVisualY + islandHost.currentVisualHeight);
         return Math.max(baseBand, pillSpan);
@@ -43,28 +50,28 @@ MouseArea {
     x: {
         if (!parent)
             return 0;
-        if (isIsland && isVertical && barPos === 3)
+        if (clampToIslandBand && isVertical && isFarCrossEdge)
             return Math.max(0, parent.width - islandBandThickness);
         return 0;
     }
     y: {
         if (!parent)
             return 0;
-        if (isIsland && !isVertical && barPos === 1)
+        if (clampToIslandBand && !isVertical && isFarCrossEdge)
             return Math.max(0, parent.height - islandBandThickness);
         return 0;
     }
     width: {
         if (!parent)
             return 0;
-        if (isIsland && isVertical)
+        if (clampToIslandBand && isVertical)
             return Math.min(parent.width, islandBandThickness);
         return parent.width;
     }
     height: {
         if (!parent)
             return 0;
-        if (isIsland && !isVertical)
+        if (clampToIslandBand && !isVertical)
             return Math.min(parent.height, islandBandThickness);
         return parent.height;
     }
@@ -94,7 +101,7 @@ MouseArea {
             daemon.performBrightnessStep(dirSign, perUnit * notchesOrSteps, root.screenName);
         } else {
             const perUnit = isTouchpad ? daemon.touchpadStep : daemon.volumeStep;
-            daemon.performVolumeStep(dirSign, perUnit * notchesOrSteps);
+            daemon.performVolumeStep(dirSign, perUnit * notchesOrSteps, root.screenName);
         }
     }
 
@@ -214,6 +221,13 @@ MouseArea {
         let matchedZoneId = "";
         let matchedItem = null;
 
+        // Track outermost leading/trailing widgets along the bar axis for Fitts's Law corner/edge hits
+        let leadingEntry = null;
+        let leadingStart = Infinity;
+        let trailingEntry = null;
+        let trailingEnd = -Infinity;
+        const barAlongExtent = isVertical ? root.height : root.width;
+
         for (let i = 0; i < keys.length; i++) {
             const entry = registry[keys[i]];
             if (!entry || !entry.item || !entry.item.visible || entry.item.width <= 0 || entry.item.height <= 0)
@@ -231,12 +245,37 @@ MouseArea {
                 continue;
 
             const pt = root.mapToItem(entry.item, localX, localY);
-            if (pt.x < 0 || pt.y < 0 || pt.x > entry.item.width || pt.y > entry.item.height)
-                continue;
+            if (pt.x >= 0 && pt.y >= 0 && pt.x <= entry.item.width && pt.y <= entry.item.height) {
+                matchedZoneId = normId;
+                matchedItem = entry.item;
+                break;
+            }
 
-            matchedZoneId = normId;
-            matchedItem = entry.item;
-            break;
+            // Record along-bar bounds in overlay coordinates for screen-edge Fitts's Law matching
+            const topLeft = entry.item.mapToItem(root, 0, 0);
+            const itemStart = isVertical ? topLeft.y : topLeft.x;
+            const itemEnd = itemStart + (isVertical ? entry.item.height : entry.item.width);
+            if (itemStart < leadingStart) {
+                leadingStart = itemStart;
+                leadingEntry = { normId: normId, item: entry.item };
+            }
+            if (itemEnd > trailingEnd) {
+                trailingEnd = itemEnd;
+                trailingEntry = { normId: normId, item: entry.item };
+            }
+        }
+
+        // Fitts's Law edge extension (matches DBarBody's edgeStrip behavior for corner cursor throws)
+        if (!matchedZoneId && barAlongExtent > 0) {
+            const alongCoord = isVertical ? localY : localX;
+            const maxEdgeGap = 28;
+            if (leadingEntry && leadingStart > 0 && leadingStart <= maxEdgeGap && alongCoord >= 0 && alongCoord < leadingStart) {
+                matchedZoneId = leadingEntry.normId;
+                matchedItem = leadingEntry.item;
+            } else if (trailingEntry && trailingEnd < barAlongExtent && (barAlongExtent - trailingEnd) <= maxEdgeGap && alongCoord > trailingEnd && alongCoord <= barAlongExtent) {
+                matchedZoneId = trailingEntry.normId;
+                matchedItem = trailingEntry.item;
+            }
         }
 
         if (!matchedZoneId) {
@@ -294,7 +333,7 @@ MouseArea {
         stopHoldRepeat();
 
         if (action === "mute") {
-            daemon.performToggleMute();
+            daemon.performToggleMute(root.screenName);
             return;
         }
 
@@ -371,7 +410,7 @@ MouseArea {
             const now = Date.now();
             if (now - lastWheelMuteMs >= 200) {
                 lastWheelMuteMs = now;
-                daemon.performToggleMute();
+                daemon.performToggleMute(root.screenName);
             }
             return;
         }
@@ -398,9 +437,10 @@ MouseArea {
             return;
         }
 
-        // Physical mouse wheel: compositors (Niri/Hyprland/Mango) scale the 120-unit detent
-        // by SettingsData.mouseScrollFactor (e.g. 120 * 0.7 = 84), so never hardcode >= 120.
-        const rawFactor = (typeof SettingsData !== "undefined" && SettingsData.mouseScrollFactor > 0)
+        // Only Niri, Hyprland, and MangoWC scale the 120-unit wheel detent by SettingsData.mouseScrollFactor
+        const compositorScalesWheel = typeof CompositorService !== "undefined"
+            && (CompositorService.isNiri || CompositorService.isHyprland || CompositorService.isMango);
+        const rawFactor = (compositorScalesWheel && typeof SettingsData !== "undefined" && SettingsData.mouseScrollFactor > 0)
             ? SettingsData.mouseScrollFactor
             : 1.0;
         const expectedNotch = Math.max(15, 120 * rawFactor);

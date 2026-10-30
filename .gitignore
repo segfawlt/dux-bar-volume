@@ -1,0 +1,9 @@
+# Archive & build artifacts
+*.tar.gz
+*.zip
+
+# Editor & OS swap/metadata files
+*.swp
+*.swo
+*~
+.DS_Store
