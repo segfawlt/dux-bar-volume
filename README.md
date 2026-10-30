@@ -7,6 +7,8 @@ This is the plugin I use daily, so it won't be abandoned. If you see long gaps b
 
 Note: 100% code generated with AI. I always do quick inspection before shipping, but can't guarantee code quality (it won't be too bad, don't worry).
 
+![Bar Volume Control Settings](./assets/preview.png)
+
 ## Features
 
 - **Scroll volume**: Adjust system volume by scrolling anywhere over the bar (supports horizontal, vertical, auto-hide, and Dux Island bars).
