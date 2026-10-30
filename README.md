@@ -13,7 +13,11 @@ A lightweight background daemon plugin for **[Dux Shell](https://duxlabs.dev)** 
 - **Button Press & Hold Repeat:** When Volume Up/Down is bound to mouse buttons (such as `M4` / `M5`), choose between **step + hold repeat**, **step click only**, or **hold repeat only**, with independent sliders for **Hold Detection Delay (ms)** and **Hold Repeat Interval (ms)**.
 - **Per-Bar & Per-Display Selection:** Enable across all bars/monitors automatically, or toggle individual `Bar — Display` targets.
 - **Granular Widget Exceptions:** Optionally keep native scroll on `Workspace Switcher`, `Control Center` Mic/Brightness sub-icons, or `Media` player, or restrict actions to `Control Center & Media Widgets Only`.
-- **Configurable Steps, Overdrive & Feedback:** Direct sliders for **Volume Step (%)**, **Touchpad Smooth Step (%)**, optional **Max Volume Overdrive Cap (up to 150%)**, **Mute-on-scroll behavior**, **Volume OSD toggle**, and **Volume sound feedback**.
+- **Configurable Steps, Touchpad, Overdrive & Feedback:**
+  - **Use Dux Shell Volume Step** by default, or toggle off to reveal a **Custom Volume Step (%)** slider.
+  - **Touchpad Scrolling** disabled by default; toggle on to reveal **Touchpad Volume Step (%)** and **Touchpad Scroll Distance (px)** sliders.
+  - **Use Default Bindings** (`Scroll Up/Down` + `Middle Click` mute) by default, or toggle off to reveal custom binding recorders and **Button Press & Hold** delay sliders.
+  - **Volume OSD Display Time:** Keep Dux Shell's default `3000 ms` popup timeout, customize the **OSD Display Time (`300 ms–6000 ms`)**, or hide the OSD completely.
 
 ## Installation
 

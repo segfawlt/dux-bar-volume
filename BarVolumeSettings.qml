@@ -252,17 +252,26 @@ PluginSettings {
     }
 
     // =========================================================================
-    // 1. Volume Step & Limits
+    // 1. Volume Step, Touchpad & Limits
     // =========================================================================
     SectionHeader {
         title: "Volume Step & Limits"
-        subtitle: "Configure how much system audio changes per scroll notch or button press"
+        subtitle: "Configure volume step size, touchpad scrolling, and maximum volume cap"
         showDivider: false
     }
 
+    ToggleSetting {
+        id: useSystemStepToggle
+        settingKey: "useSystemVolumeStep"
+        label: "Use Dux Shell Volume Step"
+        description: "Follow Dux Shell's global audio scroll step (" + (AudioService.wheelVolumeStep || 5) + "%). Turn off to set a custom step."
+        defaultValue: true
+    }
+
     SliderSetting {
+        visible: !useSystemStepToggle.value
         settingKey: "volumeStep"
-        label: "Volume Step"
+        label: "Custom Volume Step"
         description: "Percentage adjusted per scroll wheel notch or mouse button click"
         defaultValue: Math.max(1, AudioService.wheelVolumeStep || 5)
         minimum: 1
@@ -272,15 +281,36 @@ PluginSettings {
         endIcon: "volume_up"
     }
 
+    ToggleSetting {
+        id: touchpadToggle
+        settingKey: "touchpadEnabled"
+        label: "Enable Touchpad Scrolling"
+        description: "Allow two-finger touchpad scrolling on the bar to change volume"
+        defaultValue: false
+    }
+
     SliderSetting {
+        visible: touchpadToggle.value
         settingKey: "touchpadStep"
-        label: "Touchpad Smooth Scroll Step"
+        label: "Touchpad Volume Step"
         description: "Fine-grained percentage adjusted during two-finger touchpad scrolling"
         defaultValue: 1
         minimum: 1
         maximum: 15
         unit: "%"
         startIcon: "touch_app"
+    }
+
+    SliderSetting {
+        visible: touchpadToggle.value
+        settingKey: "touchpadThreshold"
+        label: "Touchpad Scroll Distance"
+        description: "Pixels of two-finger scroll required per volume step (lower = faster)"
+        defaultValue: 18
+        minimum: 6
+        maximum: 60
+        unit: "px"
+        startIcon: "swipe_vertical"
     }
 
     ToggleSetting {
@@ -315,10 +345,19 @@ PluginSettings {
     // =========================================================================
     SectionHeader {
         title: "Input Bindings"
-        subtitle: "Bind Scroll Up/Down/Left/Right, Middle Click (M3), Side Buttons (M4/M5), Extra Buttons, or Ctrl/Alt/Shift + Mouse without stealing keyboard focus"
+        subtitle: "Use the standard scroll + middle-click bindings, or customize mouse buttons and modifier combos"
+    }
+
+    ToggleSetting {
+        id: useDefaultBindingsToggle
+        settingKey: "useDefaultBindings"
+        label: "Use Default Bindings"
+        description: "Scroll Up/Down for volume and Middle Click (M3) to toggle mute. Turn off to customize bindings."
+        defaultValue: true
     }
 
     BindingRow {
+        visible: !useDefaultBindingsToggle.value
         settingKey: "volumeUpBinding"
         label: "Volume Up"
         description: "Increase system volume while hovering over the bar"
@@ -326,6 +365,7 @@ PluginSettings {
     }
 
     BindingRow {
+        visible: !useDefaultBindingsToggle.value
         settingKey: "volumeDownBinding"
         label: "Volume Down"
         description: "Decrease system volume while hovering over the bar"
@@ -333,6 +373,7 @@ PluginSettings {
     }
 
     BindingRow {
+        visible: !useDefaultBindingsToggle.value
         settingKey: "toggleMuteBinding"
         label: "Toggle Mute"
         description: "Mute or unmute system audio while hovering over the bar"
@@ -343,12 +384,14 @@ PluginSettings {
     // 3. Mouse Button Hold-to-Repeat
     // =========================================================================
     SectionHeader {
+        visible: !useDefaultBindingsToggle.value
         title: "Button Press & Hold"
         subtitle: "Customize click and rapid-hold timing when Volume Up/Down is bound to mouse buttons like M4 or M5"
     }
 
     SelectionSetting {
         id: holdModeSetting
+        visible: !useDefaultBindingsToggle.value
         settingKey: "holdRepeatMode"
         label: "Button Hold Mode"
         description: "Choose single-step click, rapid adjustment while held, or both"
@@ -370,7 +413,7 @@ PluginSettings {
     }
 
     SliderSetting {
-        visible: holdModeSetting.value !== "stepOnly"
+        visible: !useDefaultBindingsToggle.value && holdModeSetting.value !== "stepOnly"
         settingKey: "holdInitialDelayMs"
         label: "Hold Detection Delay"
         description: "How long a mouse button must be held before rapid adjustment begins"
@@ -382,7 +425,7 @@ PluginSettings {
     }
 
     SliderSetting {
-        visible: holdModeSetting.value !== "stepOnly"
+        visible: !useDefaultBindingsToggle.value && holdModeSetting.value !== "stepOnly"
         settingKey: "holdRepeatIntervalMs"
         label: "Hold Repeat Interval"
         description: "Time between each volume step while the button stays held down"
@@ -610,10 +653,32 @@ PluginSettings {
     }
 
     ToggleSetting {
+        id: showOsdToggle
         settingKey: "showOsd"
         label: "Show Volume OSD Popup"
         description: "Display Dux Shell's native on-screen volume popup when adjusting volume on the bar"
         defaultValue: true
+    }
+
+    ToggleSetting {
+        id: useDefaultOsdDurationToggle
+        visible: showOsdToggle.value
+        settingKey: "useDefaultOsdDuration"
+        label: "Use Default OSD Display Time"
+        description: "Keep Dux Shell's default 3000 ms popup timeout. Turn off to customize how long the popup stays on screen."
+        defaultValue: true
+    }
+
+    SliderSetting {
+        visible: showOsdToggle.value && !useDefaultOsdDurationToggle.value
+        settingKey: "customOsdDurationMs"
+        label: "OSD Display Time"
+        description: "Milliseconds before the volume popup disappears"
+        defaultValue: 1500
+        minimum: 300
+        maximum: 6000
+        unit: "ms"
+        startIcon: "timer"
     }
 
     ToggleSetting {

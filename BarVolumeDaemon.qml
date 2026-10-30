@@ -43,8 +43,11 @@ Scope {
     readonly property bool passThroughMediaWidget: pluginData.passThroughMediaWidget === true
     readonly property bool passThroughControlCenterSubIcons: pluginData.passThroughControlCenterSubIcons === true
 
-    // Volume step, cap & direction
+    // Volume step, touchpad, cap & direction
+    readonly property bool useSystemVolumeStep: pluginData.useSystemVolumeStep !== false
     readonly property int volumeStep: {
+        if (useSystemVolumeStep)
+            return Math.max(1, AudioService.wheelVolumeStep || 5);
         if (pluginData.volumeStep !== undefined && pluginData.volumeStep !== null) {
             const parsed = Number(pluginData.volumeStep);
             if (!isNaN(parsed) && parsed >= 1)
@@ -52,6 +55,7 @@ Scope {
         }
         return Math.max(1, AudioService.wheelVolumeStep || 5);
     }
+    readonly property bool touchpadEnabled: pluginData.touchpadEnabled === true
     readonly property int touchpadStep: {
         if (pluginData.touchpadStep !== undefined && pluginData.touchpadStep !== null) {
             const parsed = Number(pluginData.touchpadStep);
@@ -59,6 +63,14 @@ Scope {
                 return Math.min(25, Math.round(parsed));
         }
         return 1;
+    }
+    readonly property int touchpadThreshold: {
+        if (pluginData.touchpadThreshold !== undefined && pluginData.touchpadThreshold !== null) {
+            const parsed = Number(pluginData.touchpadThreshold);
+            if (!isNaN(parsed) && parsed >= 6)
+                return Math.min(100, Math.round(parsed));
+        }
+        return 18;
     }
     readonly property bool overrideMaxVolume: pluginData.overrideMaxVolume === true
     readonly property int customMaxVolume: {
@@ -72,9 +84,16 @@ Scope {
     readonly property bool reverseScroll: pluginData.reverseScroll === true
 
     // Input bindings
-    readonly property var volumeUpBinding: InputBinding.normalizeBinding(pluginData.volumeUpBinding, InputBinding.DEFAULT_VOLUME_UP)
-    readonly property var volumeDownBinding: InputBinding.normalizeBinding(pluginData.volumeDownBinding, InputBinding.DEFAULT_VOLUME_DOWN)
-    readonly property var toggleMuteBinding: InputBinding.normalizeBinding(pluginData.toggleMuteBinding, InputBinding.DEFAULT_TOGGLE_MUTE)
+    readonly property bool useDefaultBindings: pluginData.useDefaultBindings !== false
+    readonly property var volumeUpBinding: useDefaultBindings
+        ? InputBinding.DEFAULT_VOLUME_UP
+        : InputBinding.normalizeBinding(pluginData.volumeUpBinding, InputBinding.DEFAULT_VOLUME_UP)
+    readonly property var volumeDownBinding: useDefaultBindings
+        ? InputBinding.DEFAULT_VOLUME_DOWN
+        : InputBinding.normalizeBinding(pluginData.volumeDownBinding, InputBinding.DEFAULT_VOLUME_DOWN)
+    readonly property var toggleMuteBinding: useDefaultBindings
+        ? InputBinding.DEFAULT_TOGGLE_MUTE
+        : InputBinding.normalizeBinding(pluginData.toggleMuteBinding, InputBinding.DEFAULT_TOGGLE_MUTE)
     readonly property int acceptedButtonsMask: InputBinding.acceptedButtonsMask([volumeUpBinding, volumeDownBinding, toggleMuteBinding])
 
     // Button hold-to-repeat configuration
@@ -99,12 +118,22 @@ Scope {
     // Mute & Feedback behavior
     readonly property string muteOnVolumeChange: pluginData.muteOnVolumeChange || "unmuteOnUp"
     readonly property bool showOsd: pluginData.showOsd !== false
+    readonly property bool useDefaultOsdDuration: pluginData.useDefaultOsdDuration !== false
+    readonly property int customOsdDurationMs: {
+        if (pluginData.customOsdDurationMs !== undefined && pluginData.customOsdDurationMs !== null) {
+            const parsed = Number(pluginData.customOsdDurationMs);
+            if (!isNaN(parsed) && parsed >= 300)
+                return Math.min(10000, Math.round(parsed));
+        }
+        return 1500;
+    }
     readonly property bool playFeedbackSound: pluginData.playFeedbackSound !== false
 
     // Pending PipeWire volume write tracking (prevents dropped scroll detents)
     property var pendingVolumeWrites: []
     property bool writingVolume: false
     property double lastWriteTimeMs: 0
+    property double lastPluginAudioActionMs: 0
 
     // Managed overlay instances across active bar surfaces
     property var activeOverlays: []
@@ -148,15 +177,43 @@ Scope {
         }
     }
 
+    Timer {
+        id: osdDurationSyncTimer
+        interval: 25
+        repeat: false
+        onTriggered: root.applyVolumeOsdDuration()
+    }
+
+    onUseDefaultOsdDurationChanged: {
+        if (useDefaultOsdDuration)
+            restoreDefaultOsdDuration();
+    }
+
     Connections {
         target: AudioService.sink?.audio ?? null
         ignoreUnknownSignals: true
         function onVolumeChanged() {
+            if (root.showOsd && (Date.now() - root.lastPluginAudioActionMs) < 800) {
+                Qt.callLater(root.applyVolumeOsdDuration);
+                osdDurationSyncTimer.restart();
+            } else if (root.useDefaultOsdDuration || (Date.now() - root.lastPluginAudioActionMs) >= 800) {
+                root.restoreDefaultOsdDuration();
+            }
+
             if (root.writingVolume || root.pendingVolumeWrites.length === 0)
                 return;
             const currentPct = Math.round((AudioService.sink?.audio?.volume ?? 0) * 100);
             const idx = root.pendingVolumeWrites.indexOf(currentPct);
             root.pendingVolumeWrites = idx < 0 ? [] : root.pendingVolumeWrites.slice(idx + 1);
+        }
+
+        function onMutedChanged() {
+            if (root.showOsd && (Date.now() - root.lastPluginAudioActionMs) < 800) {
+                Qt.callLater(root.applyVolumeOsdDuration);
+                osdDurationSyncTimer.restart();
+            } else if (root.useDefaultOsdDuration || (Date.now() - root.lastPluginAudioActionMs) >= 800) {
+                root.restoreDefaultOsdDuration();
+            }
         }
     }
 
@@ -197,12 +254,39 @@ Scope {
         return disabledBarTargets.indexOf(key) === -1;
     }
 
+    function applyVolumeOsdDuration() {
+        if (!showOsd || useDefaultOsdDuration)
+            return;
+        const map = OSDManager.currentOSDsByScreen || {};
+        const screens = Object.keys(map);
+        for (let i = 0; i < screens.length; i++) {
+            const osd = map[screens[i]];
+            if (osd && osd.osdKind === "volume") {
+                osd.autoHideInterval = customOsdDurationMs;
+                if (osd.shouldBeVisible && typeof osd.resetHideTimer === "function")
+                    osd.resetHideTimer();
+            }
+        }
+    }
+
+    function restoreDefaultOsdDuration() {
+        const map = OSDManager.currentOSDsByScreen || {};
+        const screens = Object.keys(map);
+        for (let i = 0; i < screens.length; i++) {
+            const osd = map[screens[i]];
+            if (osd && osd.osdKind === "volume" && osd.autoHideInterval !== 3000) {
+                osd.autoHideInterval = 3000;
+            }
+        }
+    }
+
     function performVolumeStep(dirSign, stepAmount) {
         const audio = AudioService.sink?.audio;
         if (!audio || dirSign === 0)
             return;
 
         const now = Date.now();
+        lastPluginAudioActionMs = now;
         if (now - lastWriteTimeMs > 600)
             pendingVolumeWrites = [];
 
@@ -221,14 +305,22 @@ Scope {
                 audio.muted = false;
         }
 
-        if (nextVol === currentVol)
+        if (nextVol === currentVol) {
+            if (showOsd && !useDefaultOsdDuration)
+                applyVolumeOsdDuration();
             return;
+        }
 
         writingVolume = true;
         audio.volume = nextVol / 100;
         writingVolume = false;
         lastWriteTimeMs = now;
         pendingVolumeWrites = pendingVolumeWrites.concat([nextVol]).slice(-10);
+
+        if (showOsd && !useDefaultOsdDuration) {
+            Qt.callLater(applyVolumeOsdDuration);
+            osdDurationSyncTimer.restart();
+        }
 
         if (playFeedbackSound)
             AudioService.playVolumeChangeSoundIfEnabled();
@@ -238,9 +330,14 @@ Scope {
         const audio = AudioService.sink?.audio;
         if (!audio)
             return;
+        lastPluginAudioActionMs = Date.now();
         if (!showOsd)
             SessionData.suppressOSDTemporarily();
         AudioService.toggleMute();
+        if (showOsd && !useDefaultOsdDuration) {
+            Qt.callLater(applyVolumeOsdDuration);
+            osdDurationSyncTimer.restart();
+        }
     }
 
     function findOverlayTarget(barBody) {
@@ -390,6 +487,8 @@ Scope {
 
     Component.onDestruction: {
         resyncTimer.stop();
+        osdDurationSyncTimer.stop();
+        restoreDefaultOsdDuration();
         destroyAllOverlays();
         AudioService.removeRef();
     }

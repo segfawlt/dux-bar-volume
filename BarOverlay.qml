@@ -299,6 +299,11 @@ MouseArea {
             return;
         }
 
+        if (info.isTouchpad && !daemon.touchpadEnabled) {
+            wheel.accepted = false;
+            return;
+        }
+
         let action = "";
         if (InputBinding.matchesWheel(daemon.volumeUpBinding, info)) {
             action = "up";
@@ -334,7 +339,7 @@ MouseArea {
                 touchpadAccum = 0;
 
             touchpadAccum += dirSign * info.delta;
-            const threshold = 18;
+            const threshold = Math.max(6, daemon.touchpadThreshold || 18);
             if (Math.abs(touchpadAccum) >= threshold) {
                 const steps = Math.trunc(Math.abs(touchpadAccum) / threshold);
                 const sign = touchpadAccum > 0 ? 1 : -1;
