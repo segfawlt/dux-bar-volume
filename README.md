@@ -20,7 +20,8 @@ Note: 100% code generated with AI. I always do quick inspection before shipping,
 
 ## Installation
 
-### Via Dux Plugin Registry / Settings UI
+### Via Dux Plugin Registry / Settings UI (Not yet)
+This section is made for future integration. I have not made PR for this plugin yet, so for now you cannot install or browse the plugin directly from DMS
 
 Search for **Bar Volume Control** in **Dux Shell Settings → Plugins → Browse**, or install from the terminal:
 
@@ -29,7 +30,7 @@ dms plugins install barVolume
 dms ipc call plugins enable barVolume
 ```
 
-### Manual Installation
+### Manual Installation (The only method currnetly)
 
 ```bash
 git clone https://github.com/segfawlt/dux-bar-volume.git ~/.config/dms/plugins/barVolume
