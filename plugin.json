@@ -10,7 +10,8 @@
     "daemon",
     "audio",
     "brightness",
-    "dankbar"
+    "dankbar",
+    "ipc"
   ],
   "component": "./BarVolumeDaemon.qml",
   "icon": "volume_up",

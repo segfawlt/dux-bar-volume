@@ -449,9 +449,9 @@ PluginSettings {
 
             Rectangle {
                 id: checkIndicator
-                width: 20
-                height: 20
-                radius: 5
+                width: Theme.iconSizeMedium
+                height: Theme.iconSizeMedium
+                radius: Theme.cornerRadiusXS
                 anchors.verticalCenter: parent.verticalCenter
                 color: checkRow.checked ? Theme.primary : "transparent"
                 border.width: checkRow.checked ? 0 : 1.5
@@ -461,7 +461,7 @@ PluginSettings {
                     visible: checkRow.checked
                     anchors.centerIn: parent
                     name: "check"
-                    size: 15
+                    size: Theme.iconSizeSmall
                     color: Theme.onPrimary
                 }
             }
@@ -470,14 +470,14 @@ PluginSettings {
                 id: zoneIcon
                 anchors.verticalCenter: parent.verticalCenter
                 name: checkRow.zoneData?.icon || "widgets"
-                size: 18
+                size: Theme.iconSizeMedium
                 color: checkRow.checked ? Theme.primary : Theme.surfaceVariantText
             }
 
             Column {
                 width: Math.max(80, parent.width - checkIndicator.width - zoneIcon.width - (sectionBadge.visible ? sectionBadge.width + Theme.spacingM : 0) - Theme.spacingM * 2)
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: 2
+                spacing: Theme.spacingXXS
 
                 StyledText {
                     width: parent.width
@@ -513,7 +513,7 @@ PluginSettings {
                     id: secText
                     anchors.centerIn: parent
                     text: checkRow.zoneData?.sectionLabel || ""
-                    font.pixelSize: Theme.fontSizeSmall - 1
+                    font.pixelSize: Theme.fontSizeSmall
                     color: Theme.surfaceVariantText
                 }
             }
@@ -585,7 +585,7 @@ PluginSettings {
 
                 Column {
                     width: Math.max(80, parent.width - badgeRect.width - Theme.spacingM)
-                    spacing: 2
+                    spacing: Theme.spacingXXS
                     anchors.verticalCenter: parent.verticalCenter
 
                     StyledText {
@@ -1148,15 +1148,15 @@ PluginSettings {
                                 DIcon {
                                     anchors.verticalCenter: parent.verticalCenter
                                     name: "web_asset"
-                                    size: 20
+                                    size: Theme.iconSizeMedium
                                     color: Theme.primary
                                 }
 
                                 Column {
                                     id: headerTextCol
-                                    width: Math.max(80, parent.width - 56)
+                                    width: Math.max(80, parent.width - Theme.iconSizeMedium * 2 - Theme.spacingS * 2)
                                     anchors.verticalCenter: parent.verticalCenter
-                                    spacing: 1
+                                    spacing: Theme.spacingXXS
 
                                     StyledText {
                                         width: parent.width
@@ -1179,7 +1179,7 @@ PluginSettings {
                                 DIcon {
                                     anchors.verticalCenter: parent.verticalCenter
                                     name: barCard.collapsed ? "expand_more" : "expand_less"
-                                    size: 20
+                                    size: Theme.iconSizeMedium
                                     color: Theme.surfaceVariantText
                                 }
                             }
