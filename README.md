@@ -4,7 +4,7 @@ A lightweight background daemon plugin for **[Dux Shell](https://duxlabs.dev)** 
 ## Note
 This is the plugin I use daily, so it won't be abandoned. If you see long gaps between commits, it just means everything is working smoothly. PRs are very welcome! 
 
-Note: 100% code generated with AI. I always do 'quick' inspection though, but can't guarantee code quality (it won't be too bad honestly).
+Note: 100% code generated with AI. I always do quick inspection before shipping, but can't guarantee code quality (it won't be too bad, don't worry).
 ## Features
 
 - **Hover & Scroll Volume Control:** Hover anywhere over your bar (including auto-hiding bars, vertical bars, and Dux Island bars) and scroll up/down to adjust system-wide PipeWire volume (`AudioService`) with immediate first-notch response across compositors (`Niri`, `Hyprland`, `Sway`, `MangoWC`, `DWL`, `KWin`).
