@@ -1,13 +1,12 @@
 # Bar Volume Control
 
 Control the system volume and monitor brightness by scrolling over any [Dux Shell](https://duxlabs.dev) bar (`dux-shell >= 2.0.0`).
+![Bar Volume Control Settings](./assets/preview.png)
 
 ## Note
 This is the plugin I use daily, so it won't be abandoned. If you see long gaps between commits, it just means everything is working smoothly. PRs are very welcome! 
 
 Note: 100% code generated with AI. I always do quick inspection before shipping, but can't guarantee code quality (it won't be too bad, don't worry).
-
-![Bar Volume Control Settings](./assets/preview.png)
 
 ## Features
 
