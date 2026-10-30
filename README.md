@@ -1,23 +1,22 @@
 # Bar Volume (`barVolume`) — Dux Shell Plugin
 
-A lightweight background daemon plugin for **[Dux Shell](https://duxlabs.dev)** (`dux-shell >= 2.0.0`) that turns your bar into an instant, customizable system audio controller on hover — without adding dummy bar widgets or stealing keyboard focus from your active window.
+A lightweight background daemon plugin for **[Dux Shell](https://duxlabs.dev)** (`dux-shell >= 2.0.0`) that turns your bar into an instant, customizable system audio and monitor brightness controller on hover — without adding dummy bar widgets or stealing keyboard focus from your active window.
 
 ## Features
 
-- **Hover & Scroll Volume Control:** Hover anywhere over your bar (including auto-hiding bars) and scroll up/down to adjust system-wide PipeWire volume (`AudioService`).
-- **System-Wide Media Override:** Scrolling over the Media (`music`) widget adjusts **system audio** by default instead of per-player MPRIS volume (toggleable in settings).
-- **Zero Focus-Stealing Custom Bindings:** Rebind **Volume Up**, **Volume Down**, and **Toggle Mute** via an interactive *"Click or scroll to bind"* recorder in Settings:
-  - Scroll directions (`Scroll Up`, `Scroll Down`, `Scroll Left`, `Scroll Right`)
-  - Mouse buttons (`Middle Click / M3`, `Side Back / M4`, `Side Forward / M5`, `Extra Buttons M6+`, `Right Click`)
-  - Optional modifier combinations (`Ctrl`, `Alt`, `Shift`, `Super` + Scroll/Click)
-- **Button Press & Hold Repeat:** When Volume Up/Down is bound to mouse buttons (such as `M4` / `M5`), choose between **step + hold repeat**, **step click only**, or **hold repeat only**, with independent sliders for **Hold Detection Delay (ms)** and **Hold Repeat Interval (ms)**.
+- **Hover & Scroll Volume Control:** Hover anywhere over your bar (including auto-hiding bars and Dux Island bars) and scroll up/down to adjust system-wide PipeWire volume (`AudioService`), with immediate first-notch response regardless of compositor `mouseScrollFactor`.
+- **Control Center Hover Brightness:** Hover over the **Control Center** bar widget and scroll to adjust display brightness (`BrightnessService`) for that bar's monitor (`DDC/CI`, laptop backlight, or per-output software gamma), with configurable target zone (*Entire Control Center*, *Entire Control Center except Mic icon*, or *Brightness icon only*) and step percentage.
+- **Live-Fetched Widget Checklist & Per-Bar Customization:**
+  - Automatically discovers every active widget configured on your bars (`Empty Bar Space`, `Dux Island`, `Workspace switcher`, `Media`, `Control Center`, `Running apps`, `Clock`, third-party plugin widgets, etc.).
+  - Uncheck any widget (e.g., **Media** to keep separate per-player audio scroll, or **Workspace switcher** to keep workspace scroll) while keeping volume control everywhere else.
+  - Toggle **Customize Checklist Per Bar** to configure independent widget checklists for each bar (e.g., `Main Bar` vs `Bar 2`).
+- **Zero Focus-Stealing Custom Bindings:** Keep default bindings (`Scroll Up/Down` + `Middle Click / M3` mute) or toggle off **Use Default Bindings** to rebind **Volume Up**, **Volume Down**, and **Toggle Mute** via an interactive *"Click or scroll to bind"* recorder (`M3`, `M4/M5`, `M6+`, `Right Click`, scroll directions, and `Ctrl`/`Alt`/`Shift`/`Super` modifiers).
+- **Button Press & Hold Repeat:** When actions are bound to mouse buttons, choose between **step + hold repeat**, **step click only**, or **hold repeat only**, with clean `50 ms` / `25 ms`-stepped sliders for **Hold Detection Delay** and **Hold Repeat Interval**.
 - **Per-Bar & Per-Display Selection:** Enable across all bars/monitors automatically, or toggle individual `Bar — Display` targets.
-- **Granular Widget Exceptions:** Optionally keep native scroll on `Workspace Switcher`, `Control Center` Mic/Brightness sub-icons, or `Media` player, or restrict actions to `Control Center & Media Widgets Only`.
-- **Configurable Steps, Touchpad, Overdrive & Feedback:**
+- **Configurable Steps, Touchpad, Overdrive & 50ms-Stepped OSD:**
   - **Use Dux Shell Volume Step** by default, or toggle off to reveal a **Custom Volume Step (%)** slider.
   - **Touchpad Scrolling** disabled by default; toggle on to reveal **Touchpad Volume Step (%)** and **Touchpad Scroll Distance (px)** sliders.
-  - **Use Default Bindings** (`Scroll Up/Down` + `Middle Click` mute) by default, or toggle off to reveal custom binding recorders and **Button Press & Hold** delay sliders.
-  - **Volume OSD Display Time:** Keep Dux Shell's default `3000 ms` popup timeout, customize the **OSD Display Time (`300 ms–6000 ms`)**, or hide the OSD completely.
+  - **OSD Display Time (`300 ms–6000 ms`):** Always available whenever **Show Volume OSD Popup** is enabled, snapping cleanly to `50 ms` increments (hidden automatically if OSD popups are turned off).
 
 ## Installation
 
@@ -36,4 +35,4 @@ dms ipc call plugins reload barVolume
 
 ## Configuration
 
-Open **Dux Shell Settings → Plugins → Bar Volume** to customize steps, bindings, hold delays, bars/displays, widget pass-throughs, mute behavior, and OSD feedback. All changes apply immediately.
+Open **Dux Shell Settings → Plugins → Bar Volume** to customize volume/brightness steps, per-bar widget checklists, input bindings, hold delays, bars/displays, mute behavior, and OSD popup timing. All changes apply immediately.

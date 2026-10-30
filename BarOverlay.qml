@@ -79,10 +79,24 @@ MouseArea {
 
     property real touchpadAccum: 0
     property real highResAccum: 0
+    property string lastScrollTargetKind: "volume"
     property double lastWheelEventMs: 0
     property int activeHoldDirection: 0
     property int activeHoldButton: 0
+    property string activeHoldTargetKind: "volume"
     property double lastWheelMuteMs: 0
+
+    function dispatchStep(targetKind, dirSign, notchesOrSteps, isTouchpad) {
+        if (!daemon || dirSign === 0)
+            return;
+        if (targetKind === "brightness") {
+            const perUnit = isTouchpad ? daemon.touchpadStep : daemon.brightnessStep;
+            daemon.performBrightnessStep(dirSign, perUnit * notchesOrSteps, root.screenName);
+        } else {
+            const perUnit = isTouchpad ? daemon.touchpadStep : daemon.volumeStep;
+            daemon.performVolumeStep(dirSign, perUnit * notchesOrSteps);
+        }
+    }
 
     Timer {
         id: holdInitialTimer
@@ -93,8 +107,8 @@ MouseArea {
                 root.stopHoldRepeat();
                 return;
             }
-            root.daemon.performVolumeStep(root.activeHoldDirection, root.daemon.volumeStep);
-            holdRepeatTimer.interval = Math.max(15, root.daemon.holdRepeatIntervalMs);
+            root.dispatchStep(root.activeHoldTargetKind, root.activeHoldDirection, 1, false);
+            holdRepeatTimer.interval = Math.max(25, root.daemon.holdRepeatIntervalMs);
             holdRepeatTimer.restart();
         }
     }
@@ -102,13 +116,13 @@ MouseArea {
     Timer {
         id: holdRepeatTimer
         repeat: true
-        interval: root.daemon ? Math.max(15, root.daemon.holdRepeatIntervalMs) : 80
+        interval: root.daemon ? Math.max(25, root.daemon.holdRepeatIntervalMs) : 75
         onTriggered: {
             if (!root.pressed || root.activeHoldDirection === 0 || !root.daemon) {
                 root.stopHoldRepeat();
                 return;
             }
-            root.daemon.performVolumeStep(root.activeHoldDirection, root.daemon.volumeStep);
+            root.dispatchStep(root.activeHoldTargetKind, root.activeHoldDirection, 1, false);
         }
     }
 
@@ -117,6 +131,7 @@ MouseArea {
         holdRepeatTimer.stop();
         activeHoldDirection = 0;
         activeHoldButton = 0;
+        activeHoldTargetKind = "volume";
     }
 
     onEnabledChanged: {
@@ -140,52 +155,68 @@ MouseArea {
         return p.x >= 0 && p.y >= 0 && p.x <= subItem.width && p.y <= subItem.height;
     }
 
-    function isOverControlCenterMicOrBrightness(ccItem, localX, localY) {
+    function isOverControlCenterGroup(ccItem, groupKind, localX, localY) {
         if (!ccItem)
             return false;
         try {
             if (typeof ccItem.refreshInteractionRefs === "function")
                 ccItem.refreshInteractionRefs();
-            if (isOverSubItem(ccItem._hBrightness, localX, localY))
-                return true;
-            if (isOverSubItem(ccItem._hMic, localX, localY))
-                return true;
-            if (isOverSubItem(ccItem._vBrightness, localX, localY))
-                return true;
-            if (isOverSubItem(ccItem._vMic, localX, localY))
-                return true;
+            if (groupKind === "brightness") {
+                return isOverSubItem(ccItem._hBrightness, localX, localY)
+                    || isOverSubItem(ccItem._vBrightness, localX, localY);
+            }
+            if (groupKind === "mic") {
+                return isOverSubItem(ccItem._hMic, localX, localY)
+                    || isOverSubItem(ccItem._vMic, localX, localY);
+            }
         } catch (e) {
             return false;
         }
         return false;
     }
 
-    function isPointAllowed(localX, localY) {
-        if (!daemon)
+    function isOverCompactIslandPill(localX, localY) {
+        if (!islandHost || islandExpanded)
             return false;
+        if (islandHost.inputMaskItem && isOverSubItem(islandHost.inputMaskItem, localX, localY))
+            return true;
+        if (islandHost.currentVisualWidth > 0 && islandHost.currentVisualHeight > 0) {
+            const p = root.mapToItem(islandHost, localX, localY);
+            return p.x >= islandHost.currentVisualX
+                && p.y >= islandHost.currentVisualY
+                && p.x <= (islandHost.currentVisualX + islandHost.currentVisualWidth)
+                && p.y <= (islandHost.currentVisualY + islandHost.currentVisualHeight);
+        }
+        return false;
+    }
+
+    // Returns "passthrough" | "volume" | "brightness"
+    function resolvePointAction(localX, localY) {
+        if (!daemon)
+            return "passthrough";
 
         // Never hijack scroll or middle-click inside an expanded Dux Island sheet/drawer
-        if (isIsland && islandExpanded && islandHost?.inputMaskItem) {
-            if (isOverSubItem(islandHost.inputMaskItem, localX, localY))
-                return false;
+        if (islandHost && islandExpanded) {
+            if (islandHost.inputMaskItem && isOverSubItem(islandHost.inputMaskItem, localX, localY))
+                return "passthrough";
+            if (islandHost.currentVisualWidth > 0 && islandHost.currentVisualHeight > 0) {
+                const p = root.mapToItem(islandHost, localX, localY);
+                if (p.x >= islandHost.currentVisualX
+                    && p.y >= islandHost.currentVisualY
+                    && p.x <= (islandHost.currentVisualX + islandHost.currentVisualWidth)
+                    && p.y <= (islandHost.currentVisualY + islandHost.currentVisualHeight))
+                    return "passthrough";
+            }
         }
-
-        const mode = daemon.coverageMode;
-        const needCheck = mode === "audioWidgetsOnly"
-            || daemon.passThroughWorkspaceSwitcher
-            || daemon.passThroughMediaWidget
-            || daemon.passThroughControlCenterSubIcons;
-
-        if (!needCheck)
-            return true;
 
         const registry = BarWidgetService.widgetRegistry || {};
         const keys = Object.keys(registry);
-        let matchedAudioWidget = false;
+        let matchedZoneId = "";
+        let matchedItem = null;
 
         for (let i = 0; i < keys.length; i++) {
             const entry = registry[keys[i]];
-            if (!entry || !entry.item || !entry.item.visible)
+            if (!entry || !entry.item || !entry.item.visible || entry.item.width <= 0 || entry.item.height <= 0)
                 continue;
             if (entry.context?.kind && entry.context.kind !== "bar")
                 continue;
@@ -195,38 +226,52 @@ MouseArea {
             if (entryBarId && root.barId && entryBarId !== root.barId)
                 continue;
 
+            const normId = daemon.normalizeZoneId(entry.widgetId || "");
+            if (!normId)
+                continue;
+
             const pt = root.mapToItem(entry.item, localX, localY);
             if (pt.x < 0 || pt.y < 0 || pt.x > entry.item.width || pt.y > entry.item.height)
                 continue;
 
-            const wid = entry.widgetId || "";
-            const isMusic = wid === "music" || wid.indexOf("music:") === 0;
-            const isControlCenter = wid === "controlCenterButton";
-            const isWorkspace = wid === "workspaceSwitcher";
-
-            if (isWorkspace && daemon.passThroughWorkspaceSwitcher)
-                return false;
-
-            if (isMusic && daemon.passThroughMediaWidget)
-                return false;
-
-            if (isControlCenter && daemon.passThroughControlCenterSubIcons) {
-                if (isOverControlCenterMicOrBrightness(entry.item, localX, localY))
-                    return false;
-            }
-
-            if (isMusic || isControlCenter)
-                matchedAudioWidget = true;
+            matchedZoneId = normId;
+            matchedItem = entry.item;
+            break;
         }
 
-        if (mode === "audioWidgetsOnly")
-            return matchedAudioWidget;
+        if (!matchedZoneId) {
+            matchedZoneId = isOverCompactIslandPill(localX, localY) ? "island" : "__empty__";
+        }
 
-        return true;
+        if (!daemon.isZoneEnabledForBar(root.barId, matchedZoneId))
+            return "passthrough";
+
+        if (matchedZoneId === "controlCenterButton"
+            && daemon.controlCenterBrightnessEnabled
+            && BrightnessService.brightnessAvailable) {
+            const ccZone = daemon.controlCenterBrightnessZone;
+            if (ccZone === "entireWidget")
+                return "brightness";
+            if (ccZone === "entireExceptMic") {
+                if (isOverControlCenterGroup(matchedItem, "mic", localX, localY))
+                    return "passthrough";
+                return "brightness";
+            }
+            if (ccZone === "brightnessIconOnly") {
+                if (isOverControlCenterGroup(matchedItem, "brightness", localX, localY))
+                    return "brightness";
+                if (isOverControlCenterGroup(matchedItem, "mic", localX, localY))
+                    return "passthrough";
+                return "volume";
+            }
+        }
+
+        return "volume";
     }
 
     onPressed: mouse => {
-        if (!daemon || !isPointAllowed(mouse.x, mouse.y)) {
+        const targetKind = resolvePointAction(mouse.x, mouse.y);
+        if (!daemon || targetKind === "passthrough") {
             mouse.accepted = false;
             return;
         }
@@ -257,16 +302,17 @@ MouseArea {
         const holdMode = daemon.holdRepeatMode;
 
         if (holdMode === "stepOnly") {
-            daemon.performVolumeStep(dirSign, daemon.volumeStep);
+            dispatchStep(targetKind, dirSign, 1, false);
             return;
         }
 
         if (holdMode === "both") {
-            daemon.performVolumeStep(dirSign, daemon.volumeStep);
+            dispatchStep(targetKind, dirSign, 1, false);
         }
 
         activeHoldDirection = dirSign;
         activeHoldButton = mouse.button;
+        activeHoldTargetKind = targetKind;
         holdInitialTimer.interval = Math.max(50, daemon.holdInitialDelayMs);
         holdInitialTimer.restart();
     }
@@ -288,7 +334,8 @@ MouseArea {
             return;
         }
 
-        if (!daemon || !isPointAllowed(wheel.x, wheel.y)) {
+        const targetKind = resolvePointAction(wheel.x, wheel.y);
+        if (!daemon || targetKind === "passthrough") {
             wheel.accepted = false;
             return;
         }
@@ -331,8 +378,10 @@ MouseArea {
 
         const dirSign = (action === "up" ? 1 : -1) * (daemon.reverseScroll ? -1 : 1);
         const now = Date.now();
-        const isFreshGesture = (now - lastWheelEventMs) > 220;
+        const targetChanged = lastScrollTargetKind !== targetKind;
+        const isFreshGesture = (now - lastWheelEventMs) > 220 || targetChanged;
         lastWheelEventMs = now;
+        lastScrollTargetKind = targetKind;
 
         if (info.isTouchpad) {
             if (wheel.phase === Qt.ScrollBegin || isFreshGesture || (touchpadAccum !== 0 && (touchpadAccum * dirSign) < 0))
@@ -344,7 +393,7 @@ MouseArea {
                 const steps = Math.trunc(Math.abs(touchpadAccum) / threshold);
                 const sign = touchpadAccum > 0 ? 1 : -1;
                 touchpadAccum -= sign * steps * threshold;
-                daemon.performVolumeStep(sign, daemon.touchpadStep * steps);
+                dispatchStep(targetKind, sign, steps, true);
             }
             return;
         }
@@ -364,15 +413,13 @@ MouseArea {
             highResAccum = 0;
             const unit = Math.max(discreteMinDelta, expectedNotch);
             const notches = Math.max(1, Math.round(info.delta / unit));
-            daemon.performVolumeStep(dirSign, daemon.volumeStep * notches);
+            dispatchStep(targetKind, dirSign, notches, false);
             return;
         }
 
-        // Ultra-fine high-resolution free-spin wheels (< discreteMinDelta per micro-pulse):
-        // fire immediately on the leading edge of a fresh gesture, then accumulate smoothly.
         if (isFreshGesture) {
             highResAccum = 0;
-            daemon.performVolumeStep(dirSign, daemon.volumeStep);
+            dispatchStep(targetKind, dirSign, 1, false);
             return;
         }
 
@@ -381,7 +428,7 @@ MouseArea {
             const notches = Math.trunc(Math.abs(highResAccum) / expectedNotch);
             const sign = highResAccum > 0 ? 1 : -1;
             highResAccum -= sign * notches * expectedNotch;
-            daemon.performVolumeStep(sign, daemon.volumeStep * notches);
+            dispatchStep(targetKind, sign, notches, false);
         }
     }
 }

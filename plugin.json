@@ -1,13 +1,14 @@
 {
   "id": "barVolume",
   "name": "Bar Volume",
-  "description": "Control system audio volume and mute by scrolling or clicking mouse buttons over any bar",
-  "version": "1.0.0",
+  "description": "Control system volume, mute, and monitor brightness by hovering and scrolling over any bar with per-bar widget checklists",
+  "version": "1.1.0",
   "author": "segfawlt",
   "type": "daemon",
   "capabilities": [
     "daemon",
     "audio",
+    "brightness",
     "dankbar"
   ],
   "component": "./BarVolumeDaemon.qml",

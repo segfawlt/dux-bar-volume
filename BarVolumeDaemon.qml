@@ -37,11 +37,33 @@ Scope {
     readonly property bool targetAllBars: pluginData.targetAllBars !== false
     readonly property var disabledBarTargets: Array.isArray(pluginData.disabledBarTargets) ? pluginData.disabledBarTargets : []
 
-    // Zone coverage & per-widget exceptions
-    readonly property string coverageMode: pluginData.coverageMode || "entireBar"
-    readonly property bool passThroughWorkspaceSwitcher: pluginData.passThroughWorkspaceSwitcher === true
-    readonly property bool passThroughMediaWidget: pluginData.passThroughMediaWidget === true
-    readonly property bool passThroughControlCenterSubIcons: pluginData.passThroughControlCenterSubIcons === true
+    // Zone coverage (shared checklist + per-bar checklist)
+    readonly property bool perBarCoverageEnabled: pluginData.perBarCoverageEnabled === true
+    readonly property var disabledZones: {
+        if (Array.isArray(pluginData.disabledZones))
+            return pluginData.disabledZones;
+        const migrated = [];
+        if (pluginData.passThroughWorkspaceSwitcher === true)
+            migrated.push("workspaceSwitcher");
+        if (pluginData.passThroughMediaWidget === true)
+            migrated.push("music");
+        return migrated;
+    }
+    readonly property var perBarDisabledZones: (pluginData.perBarDisabledZones && typeof pluginData.perBarDisabledZones === "object" && !Array.isArray(pluginData.perBarDisabledZones))
+        ? pluginData.perBarDisabledZones
+        : ({})
+
+    // Control Center hover brightness
+    readonly property bool controlCenterBrightnessEnabled: pluginData.controlCenterBrightnessEnabled !== false
+    readonly property string controlCenterBrightnessZone: pluginData.controlCenterBrightnessZone || "entireWidget"
+    readonly property int brightnessStep: {
+        if (pluginData.brightnessStep !== undefined && pluginData.brightnessStep !== null) {
+            const parsed = Number(pluginData.brightnessStep);
+            if (!isNaN(parsed) && parsed >= 1)
+                return Math.min(25, Math.round(parsed));
+        }
+        return 5;
+    }
 
     // Volume step, touchpad, cap & direction
     readonly property bool useSystemVolumeStep: pluginData.useSystemVolumeStep !== false
@@ -96,36 +118,35 @@ Scope {
         : InputBinding.normalizeBinding(pluginData.toggleMuteBinding, InputBinding.DEFAULT_TOGGLE_MUTE)
     readonly property int acceptedButtonsMask: InputBinding.acceptedButtonsMask([volumeUpBinding, volumeDownBinding, toggleMuteBinding])
 
-    // Button hold-to-repeat configuration
+    // Button hold-to-repeat configuration (snapped to clean ms increments)
     readonly property string holdRepeatMode: pluginData.holdRepeatMode || "both"
     readonly property int holdInitialDelayMs: {
         if (pluginData.holdInitialDelayMs !== undefined && pluginData.holdInitialDelayMs !== null) {
             const parsed = Number(pluginData.holdInitialDelayMs);
-            if (!isNaN(parsed) && parsed >= 50)
-                return Math.min(2000, Math.round(parsed));
+            if (!isNaN(parsed) && parsed >= 100)
+                return Math.max(100, Math.min(1000, Math.round(parsed / 50) * 50));
         }
         return 350;
     }
     readonly property int holdRepeatIntervalMs: {
         if (pluginData.holdRepeatIntervalMs !== undefined && pluginData.holdRepeatIntervalMs !== null) {
             const parsed = Number(pluginData.holdRepeatIntervalMs);
-            if (!isNaN(parsed) && parsed >= 15)
-                return Math.min(1000, Math.round(parsed));
+            if (!isNaN(parsed) && parsed >= 25)
+                return Math.max(25, Math.min(500, Math.round(parsed / 25) * 25));
         }
-        return 80;
+        return 75;
     }
 
-    // Mute & Feedback behavior
+    // Mute & Feedback behavior (OSD duration always active when showOsd is enabled, snapped to 50ms)
     readonly property string muteOnVolumeChange: pluginData.muteOnVolumeChange || "unmuteOnUp"
     readonly property bool showOsd: pluginData.showOsd !== false
-    readonly property bool useDefaultOsdDuration: pluginData.useDefaultOsdDuration !== false
     readonly property int customOsdDurationMs: {
         if (pluginData.customOsdDurationMs !== undefined && pluginData.customOsdDurationMs !== null) {
             const parsed = Number(pluginData.customOsdDurationMs);
             if (!isNaN(parsed) && parsed >= 300)
-                return Math.min(10000, Math.round(parsed));
+                return Math.max(300, Math.min(6000, Math.round(parsed / 50) * 50));
         }
-        return 1500;
+        return 2000;
     }
     readonly property bool playFeedbackSound: pluginData.playFeedbackSound !== false
 
@@ -133,7 +154,7 @@ Scope {
     property var pendingVolumeWrites: []
     property bool writingVolume: false
     property double lastWriteTimeMs: 0
-    property double lastPluginAudioActionMs: 0
+    property double lastPluginOsdActionMs: 0
 
     // Managed overlay instances across active bar surfaces
     property var activeOverlays: []
@@ -181,22 +202,17 @@ Scope {
         id: osdDurationSyncTimer
         interval: 25
         repeat: false
-        onTriggered: root.applyVolumeOsdDuration()
-    }
-
-    onUseDefaultOsdDurationChanged: {
-        if (useDefaultOsdDuration)
-            restoreDefaultOsdDuration();
+        onTriggered: root.applyActiveOsdDuration()
     }
 
     Connections {
         target: AudioService.sink?.audio ?? null
         ignoreUnknownSignals: true
         function onVolumeChanged() {
-            if (root.showOsd && (Date.now() - root.lastPluginAudioActionMs) < 800) {
-                Qt.callLater(root.applyVolumeOsdDuration);
+            if (root.showOsd && (Date.now() - root.lastPluginOsdActionMs) < 800) {
+                Qt.callLater(root.applyActiveOsdDuration);
                 osdDurationSyncTimer.restart();
-            } else if (root.useDefaultOsdDuration || (Date.now() - root.lastPluginAudioActionMs) >= 800) {
+            } else if ((Date.now() - root.lastPluginOsdActionMs) >= 800) {
                 root.restoreDefaultOsdDuration();
             }
 
@@ -208,10 +224,22 @@ Scope {
         }
 
         function onMutedChanged() {
-            if (root.showOsd && (Date.now() - root.lastPluginAudioActionMs) < 800) {
-                Qt.callLater(root.applyVolumeOsdDuration);
+            if (root.showOsd && (Date.now() - root.lastPluginOsdActionMs) < 800) {
+                Qt.callLater(root.applyActiveOsdDuration);
                 osdDurationSyncTimer.restart();
-            } else if (root.useDefaultOsdDuration || (Date.now() - root.lastPluginAudioActionMs) >= 800) {
+            } else if ((Date.now() - root.lastPluginOsdActionMs) >= 800) {
+                root.restoreDefaultOsdDuration();
+            }
+        }
+    }
+
+    Connections {
+        target: BrightnessService
+        function onBrightnessChanged(osdShown) {
+            if (osdShown && root.showOsd && (Date.now() - root.lastPluginOsdActionMs) < 800) {
+                Qt.callLater(root.applyActiveOsdDuration);
+                osdDurationSyncTimer.restart();
+            } else if ((Date.now() - root.lastPluginOsdActionMs) >= 800) {
                 root.restoreDefaultOsdDuration();
             }
         }
@@ -228,7 +256,7 @@ Scope {
                 if (ov)
                     attached.push(`${ov.barId}@${ov.screenName}(targetEnabled=${ov.targetEnabled},revealed=${ov.barRevealed},buttons=${ov.acceptedButtons},w=${Math.round(ov.width)}x${Math.round(ov.height)})`);
             }
-            return `step=${root.volumeStep}% coverage=${root.coverageMode} overlays=${attached.length} [${attached.join(", ")}]`;
+            return `step=${root.volumeStep}% osdMs=${root.customOsdDurationMs} ccBright=${root.controlCenterBrightnessEnabled}(${root.controlCenterBrightnessZone},${root.brightnessStep}%) perBar=${root.perBarCoverageEnabled} overlays=${attached.length} [${attached.join(", ")}]`;
         }
 
         function volumeUp(): string {
@@ -245,6 +273,48 @@ Scope {
             root.performToggleMute();
             return "ok";
         }
+
+        function diagnostics(): string {
+            const url = Qt.resolvedUrl("./BarVolumeSettings.qml") + "?diag=" + Date.now();
+            const comp = Qt.createComponent(url);
+            if (comp.status !== Component.Ready)
+                return "SETTINGS_COMPILE_ERROR: " + comp.errorString();
+            const inst = comp.createObject(null, {
+                width: 520,
+                pluginService: root.pluginService
+            });
+            if (!inst)
+                return "SETTINGS_INSTANTIATE_ERROR";
+            const heightVal = Math.round(inst.implicitHeight || inst.height || 0);
+            const h1 = root.resolveBrightnessDevice("HDMI-A-1");
+            const dp3 = root.resolveBrightnessDevice("DP-3");
+            inst.destroy();
+            return `settingsOk=true implicitHeight=${heightVal}px brightDevices=[HDMI-A-1->${h1}, DP-3->${dp3}]`;
+        }
+    }
+
+    function normalizeZoneId(rawId) {
+        if (!rawId || typeof rawId !== "string")
+            return "";
+        const trimmed = rawId.trim();
+        if (!trimmed || trimmed === "spacer" || trimmed === "separator")
+            return "";
+        if (trimmed === "__empty__" || trimmed === "island")
+            return trimmed;
+        if (trimmed === "music" || trimmed.indexOf("music:") === 0)
+            return "music";
+        const colonIdx = trimmed.indexOf(":");
+        return colonIdx > 0 ? trimmed.slice(0, colonIdx) : trimmed;
+    }
+
+    function isZoneEnabledForBar(barId, zoneId) {
+        const norm = normalizeZoneId(zoneId);
+        if (!norm)
+            return true;
+        const bKey = barId || "default";
+        if (perBarCoverageEnabled && Array.isArray(perBarDisabledZones[bKey]))
+            return perBarDisabledZones[bKey].indexOf(norm) === -1;
+        return disabledZones.indexOf(norm) === -1;
     }
 
     function isBarTargetEnabled(barId, screenName) {
@@ -254,14 +324,14 @@ Scope {
         return disabledBarTargets.indexOf(key) === -1;
     }
 
-    function applyVolumeOsdDuration() {
-        if (!showOsd || useDefaultOsdDuration)
+    function applyActiveOsdDuration() {
+        if (!showOsd)
             return;
         const map = OSDManager.currentOSDsByScreen || {};
         const screens = Object.keys(map);
         for (let i = 0; i < screens.length; i++) {
             const osd = map[screens[i]];
-            if (osd && osd.osdKind === "volume") {
+            if (osd && (osd.osdKind === "volume" || osd.osdKind === "brightness")) {
                 osd.autoHideInterval = customOsdDurationMs;
                 if (osd.shouldBeVisible && typeof osd.resetHideTimer === "function")
                     osd.resetHideTimer();
@@ -274,9 +344,73 @@ Scope {
         const screens = Object.keys(map);
         for (let i = 0; i < screens.length; i++) {
             const osd = map[screens[i]];
-            if (osd && osd.osdKind === "volume" && osd.autoHideInterval !== 3000) {
+            if (osd && (osd.osdKind === "volume" || osd.osdKind === "brightness") && osd.autoHideInterval !== 3000) {
                 osd.autoHideInterval = 3000;
             }
+        }
+    }
+
+    function resolveBrightnessDevice(screenName) {
+        const devs = BrightnessService.devices || [];
+        if (!BrightnessService.brightnessAvailable || devs.length === 0)
+            return "";
+
+        if (screenName) {
+            const screens = Quickshell.screens || [];
+            const scr = screens.find(s => s.name === screenName);
+            const pinKey = scr ? SettingsData.getScreenDisplayName(scr) : screenName;
+            const pinned = pinKey ? (CacheData.brightnessDevicePins || {})[pinKey] : "";
+            if (pinned && devs.some(d => d.id === pinned))
+                return pinned;
+
+            if (BrightnessService.isInternalPanelName(screenName)) {
+                const internal = devs.find(d => d.class === "backlight")
+                    || devs.find(d => d.class === "software" && d.id.split(":").pop() === screenName);
+                if (internal)
+                    return internal.id;
+            }
+
+            const externalScreens = screens.filter(s => !BrightnessService.isInternalPanelName(s.name));
+            const ddcDevs = devs.filter(d => d.class === "ddc");
+            if (ddcDevs.length === 1 && externalScreens.length <= 1)
+                return ddcDevs[0].id;
+
+            const byScreen = devs.find(d => d.class !== "leds" && d.id.split(":").pop() === screenName);
+            if (byScreen)
+                return byScreen.id;
+
+            if (ddcDevs.length > 0)
+                return ddcDevs[0].id;
+        }
+
+        return BrightnessService.getPreferredDevice() || BrightnessService.getDefaultDevice();
+    }
+
+    function performBrightnessStep(dirSign, stepAmount, screenName) {
+        if (!BrightnessService.brightnessAvailable || dirSign === 0)
+            return;
+
+        const deviceName = resolveBrightnessDevice(screenName);
+        if (!deviceName)
+            return;
+
+        const deviceInfo = BrightnessService.getCurrentDeviceInfoByName(deviceName);
+        const minVal = BrightnessService.brightnessMinimum(deviceInfo);
+        const maxVal = BrightnessService.brightnessMaximum(deviceInfo);
+        const currentVal = BrightnessService.getDeviceBrightness(deviceName);
+        const stepVal = Math.max(1, Math.round(stepAmount));
+        const nextVal = Math.max(minVal, Math.min(maxVal, currentVal + dirSign * stepVal));
+
+        lastPluginOsdActionMs = Date.now();
+        BrightnessService.lastIpcDevice = deviceName;
+        if (deviceName !== BrightnessService.currentDevice)
+            BrightnessService.setCurrentDevice(deviceName, false);
+
+        BrightnessService.setBrightness(nextVal, deviceName, !showOsd);
+
+        if (showOsd) {
+            Qt.callLater(applyActiveOsdDuration);
+            osdDurationSyncTimer.restart();
         }
     }
 
@@ -286,7 +420,7 @@ Scope {
             return;
 
         const now = Date.now();
-        lastPluginAudioActionMs = now;
+        lastPluginOsdActionMs = now;
         if (now - lastWriteTimeMs > 600)
             pendingVolumeWrites = [];
 
@@ -306,8 +440,8 @@ Scope {
         }
 
         if (nextVol === currentVol) {
-            if (showOsd && !useDefaultOsdDuration)
-                applyVolumeOsdDuration();
+            if (showOsd)
+                applyActiveOsdDuration();
             return;
         }
 
@@ -317,8 +451,8 @@ Scope {
         lastWriteTimeMs = now;
         pendingVolumeWrites = pendingVolumeWrites.concat([nextVol]).slice(-10);
 
-        if (showOsd && !useDefaultOsdDuration) {
-            Qt.callLater(applyVolumeOsdDuration);
+        if (showOsd) {
+            Qt.callLater(applyActiveOsdDuration);
             osdDurationSyncTimer.restart();
         }
 
@@ -330,12 +464,12 @@ Scope {
         const audio = AudioService.sink?.audio;
         if (!audio)
             return;
-        lastPluginAudioActionMs = Date.now();
+        lastPluginOsdActionMs = Date.now();
         if (!showOsd)
             SessionData.suppressOSDTemporarily();
         AudioService.toggleMute();
-        if (showOsd && !useDefaultOsdDuration) {
-            Qt.callLater(applyVolumeOsdDuration);
+        if (showOsd) {
+            Qt.callLater(applyActiveOsdDuration);
             osdDurationSyncTimer.restart();
         }
     }
@@ -438,7 +572,6 @@ Scope {
             if (!parentItem)
                 continue;
 
-            // Clean up any stale overlay left over on parentItem
             const existingChildren = parentItem.children || [];
             for (let c = existingChildren.length - 1; c >= 0; c--) {
                 const child = existingChildren[c];
