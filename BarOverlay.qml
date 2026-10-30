@@ -1,4 +1,5 @@
 import QtQuick
+import qs.Common
 import qs.Services
 import "./InputBinding.js" as InputBinding
 
@@ -78,6 +79,7 @@ MouseArea {
 
     property real touchpadAccum: 0
     property real highResAccum: 0
+    property double lastWheelEventMs: 0
     property int activeHoldDirection: 0
     property int activeHoldButton: 0
     property double lastWheelMuteMs: 0
@@ -323,10 +325,16 @@ MouseArea {
         }
 
         const dirSign = (action === "up" ? 1 : -1) * (daemon.reverseScroll ? -1 : 1);
+        const now = Date.now();
+        const isFreshGesture = (now - lastWheelEventMs) > 220;
+        lastWheelEventMs = now;
 
         if (info.isTouchpad) {
+            if (wheel.phase === Qt.ScrollBegin || isFreshGesture || (touchpadAccum !== 0 && (touchpadAccum * dirSign) < 0))
+                touchpadAccum = 0;
+
             touchpadAccum += dirSign * info.delta;
-            const threshold = 24;
+            const threshold = 18;
             if (Math.abs(touchpadAccum) >= threshold) {
                 const steps = Math.trunc(Math.abs(touchpadAccum) / threshold);
                 const sign = touchpadAccum > 0 ? 1 : -1;
@@ -336,17 +344,38 @@ MouseArea {
             return;
         }
 
-        if (info.delta >= 120 && (info.delta % 120) === 0) {
-            const notches = Math.max(1, Math.round(info.delta / 120));
+        // Physical mouse wheel: compositors (Niri/Hyprland/Mango) scale the 120-unit detent
+        // by SettingsData.mouseScrollFactor (e.g. 120 * 0.7 = 84), so never hardcode >= 120.
+        const rawFactor = (typeof SettingsData !== "undefined" && SettingsData.mouseScrollFactor > 0)
+            ? SettingsData.mouseScrollFactor
+            : 1.0;
+        const expectedNotch = Math.max(15, 120 * rawFactor);
+        const discreteMinDelta = Math.min(25, expectedNotch * 0.8);
+
+        if (isFreshGesture || (highResAccum !== 0 && (highResAccum * dirSign) < 0))
+            highResAccum = 0;
+
+        if (info.delta >= discreteMinDelta) {
+            highResAccum = 0;
+            const unit = Math.max(discreteMinDelta, expectedNotch);
+            const notches = Math.max(1, Math.round(info.delta / unit));
             daemon.performVolumeStep(dirSign, daemon.volumeStep * notches);
             return;
         }
 
+        // Ultra-fine high-resolution free-spin wheels (< discreteMinDelta per micro-pulse):
+        // fire immediately on the leading edge of a fresh gesture, then accumulate smoothly.
+        if (isFreshGesture) {
+            highResAccum = 0;
+            daemon.performVolumeStep(dirSign, daemon.volumeStep);
+            return;
+        }
+
         highResAccum += dirSign * info.delta;
-        if (Math.abs(highResAccum) >= 120) {
-            const notches = Math.trunc(Math.abs(highResAccum) / 120);
+        if (Math.abs(highResAccum) >= expectedNotch) {
+            const notches = Math.trunc(Math.abs(highResAccum) / expectedNotch);
             const sign = highResAccum > 0 ? 1 : -1;
-            highResAccum -= sign * notches * 120;
+            highResAccum -= sign * notches * expectedNotch;
             daemon.performVolumeStep(sign, daemon.volumeStep * notches);
         }
     }
