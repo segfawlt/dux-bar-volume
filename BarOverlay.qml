@@ -32,9 +32,9 @@ MouseArea {
     readonly property real islandBandThickness: {
         const baseBand = barUnitInset
             ? (isVertical ? barUnitInset.width : barUnitInset.height)
-            : (barBody?.effectiveBarThickness ?? 48);
+            : (barBody?.effectiveBarThickness ?? (Theme.iconSizeLarge + Theme.spacingL));
         if (!islandHost || islandExpanded)
-            return Math.max(24, baseBand);
+            return Math.max(Theme.iconSize, baseBand);
         if (isVertical) {
             const pillSpan = isFarCrossEdge
                 ? (parent ? parent.width - islandHost.currentVisualX : baseBand)
@@ -268,7 +268,7 @@ MouseArea {
         // Fitts's Law edge extension (matches DBarBody's edgeStrip behavior for corner cursor throws)
         if (!matchedZoneId && barAlongExtent > 0) {
             const alongCoord = isVertical ? localY : localX;
-            const maxEdgeGap = 28;
+            const maxEdgeGap = Theme.spacingXL;
             if (leadingEntry && leadingStart > 0 && leadingStart <= maxEdgeGap && alongCoord >= 0 && alongCoord < leadingStart) {
                 matchedZoneId = leadingEntry.normId;
                 matchedItem = leadingEntry.item;

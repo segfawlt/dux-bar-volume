@@ -427,7 +427,7 @@ PluginSettings {
         signal toggled(bool nextChecked)
 
         width: parent ? parent.width : 0
-        implicitHeight: rowBody.implicitHeight + Theme.spacingS * 2 + 2
+        implicitHeight: rowBody.implicitHeight + Theme.spacingS * 2
         height: implicitHeight
         radius: Theme.cornerRadius
         color: rowHover.containsMouse
@@ -454,7 +454,7 @@ PluginSettings {
                 radius: Theme.cornerRadiusXS
                 anchors.verticalCenter: parent.verticalCenter
                 color: checkRow.checked ? Theme.primary : "transparent"
-                border.width: checkRow.checked ? 0 : 1.5
+                border.width: checkRow.checked ? 0 : 1
                 border.color: Theme.outline
 
                 DIcon {
@@ -475,7 +475,7 @@ PluginSettings {
             }
 
             Column {
-                width: Math.max(80, parent.width - checkIndicator.width - zoneIcon.width - (sectionBadge.visible ? sectionBadge.width + Theme.spacingM : 0) - Theme.spacingM * 2)
+                width: Math.max(Theme.spacingXL * 2, parent.width - checkIndicator.width - zoneIcon.width - (sectionBadge.visible ? sectionBadge.width + Theme.spacingM : 0) - Theme.spacingM * 2)
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: Theme.spacingXXS
 
@@ -505,7 +505,7 @@ PluginSettings {
                 radius: Theme.cornerRadius
                 color: Theme.surfaceContainerHighest
                 implicitWidth: visible ? (secText.implicitWidth + Theme.spacingS * 2) : 0
-                implicitHeight: 22
+                implicitHeight: secText.implicitHeight + Theme.spacingXS * 2
                 width: implicitWidth
                 height: implicitHeight
 
@@ -546,7 +546,7 @@ PluginSettings {
         height: implicitHeight
         radius: Theme.cornerRadius
         color: isRecording ? Theme.withAlpha(Theme.primary, 0.14) : Theme.chipSurface
-        border.width: isRecording ? 1.5 : 0
+        border.width: isRecording ? 1 : 0
         border.color: isRecording ? Theme.primary : "transparent"
 
         function loadValue() {
@@ -584,7 +584,7 @@ PluginSettings {
                 spacing: Theme.spacingM
 
                 Column {
-                    width: Math.max(80, parent.width - badgeRect.width - Theme.spacingM)
+                    width: Math.max(Theme.spacingXL * 2, parent.width - badgeRect.width - Theme.spacingM)
                     spacing: Theme.spacingXXS
                     anchors.verticalCenter: parent.verticalCenter
 
@@ -612,7 +612,7 @@ PluginSettings {
                     radius: Theme.cornerRadius
                     color: bindRow.isRecording ? Theme.primary : Theme.surfaceContainerHigh
                     implicitWidth: badgeLabel.implicitWidth + Theme.spacingM * 2
-                    implicitHeight: 28
+                    implicitHeight: badgeLabel.implicitHeight + Theme.spacingXS * 2
                     width: implicitWidth
                     height: implicitHeight
 
@@ -633,8 +633,8 @@ PluginSettings {
 
                 Rectangle {
                     id: captureBox
-                    width: Math.max(120, parent.width - clearBtn.width - resetBtn.width - Theme.spacingS * 2)
-                    height: 34
+                    width: Math.max(Theme.spacingXL * 4, parent.width - clearBtn.width - resetBtn.width - Theme.spacingS * 2)
+                    height: captureLabel.implicitHeight + Theme.spacingS * 2
                     radius: Theme.cornerRadius
                     color: bindRow.isRecording
                         ? Theme.withAlpha(Theme.primary, 0.22)
@@ -643,6 +643,7 @@ PluginSettings {
                     border.color: bindRow.isRecording ? Theme.primary : Theme.withAlpha(Theme.outline, 0.35)
 
                     StyledText {
+                        id: captureLabel
                         anchors.centerIn: parent
                         width: parent.width - Theme.spacingM * 2
                         horizontalAlignment: Text.AlignHCenter
@@ -1135,7 +1136,7 @@ PluginSettings {
 
                         Rectangle {
                             width: parent.width
-                            height: Math.max(38, headerTextCol.implicitHeight + Theme.spacingXS * 2)
+                            height: Math.max(Theme.iconSizeMedium + Theme.spacingM, headerTextCol.implicitHeight + Theme.spacingXS * 2)
                             radius: Theme.cornerRadius
                             color: cardHeaderMouse.containsMouse ? Theme.surfaceContainerHigh : "transparent"
 
@@ -1154,7 +1155,7 @@ PluginSettings {
 
                                 Column {
                                     id: headerTextCol
-                                    width: Math.max(80, parent.width - Theme.iconSizeMedium * 2 - Theme.spacingS * 2)
+                                    width: Math.max(Theme.spacingXL * 2, parent.width - Theme.iconSizeMedium * 2 - Theme.spacingS * 2)
                                     anchors.verticalCenter: parent.verticalCenter
                                     spacing: Theme.spacingXXS
 
@@ -1515,7 +1516,7 @@ PluginSettings {
         visible: showOsdToggle.value
         settingKey: "customOsdDurationMs"
         label: "OSD Display Time"
-        description: "Milliseconds before the popup disappears (snaps to 50 ms steps; Dux Shell default is 3000 ms)"
+        description: "Milliseconds before the popup disappears (snaps to 50 ms steps)"
         defaultValue: 2000
         minimum: 300
         maximum: 6000

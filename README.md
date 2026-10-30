@@ -1,12 +1,12 @@
 # Bar Volume Control
 
-Control the system volume and monitor brightness by scrolling over any [Dux Shell](https://duxlabs.dev) bar (`dux-shell >= 2.0.0`).
+Control system volume by scrolling over any [Dux Shell](https://duxlabs.dev) bar, and monitor brightness over Control Center (`dux-shell >= 2.0.0`).
 ![Bar Volume Control Settings](./assets/preview.png)
 
 ## Note
 This is the plugin I use daily, so it won't be abandoned. If you see long gaps between commits, it just means everything is working smoothly. PRs are very welcome! 
 
-Note: 100% code generated with AI. I always do quick inspection before shipping, but can't guarantee code quality (it won't be too bad, don't worry).
+Note: Written with AI assistance, reviewed and tested daily by me on Niri + Dux Shell.
 
 ## Overview
 
@@ -20,7 +20,7 @@ Unlike widget-based volume or media plugins that only react over a small icon or
 - **Dual-zone bar (Audio everywhere + Brightness on Control Center):** Hover anywhere on the bar to adjust speaker/headphone volume, and hover over the **Control Center** pill (or just its Brightness sub-icon) to adjust that specific monitor's brightness (`DDC/CI`, laptop backlight, or per-output software gamma).
 - **Multi-monitor & mixed-bar setups (DankBar + Dux Island):** Run one shared widget checklist across all displays, or toggle **Customize Checklist Per Bar** to configure your primary horizontal bar, secondary vertical sidebar, and **Dux Island** bar independently — or disable the plugin entirely on specific `Bar — Display` pairs.
 - **Mouse side buttons (`M4`/`M5`) or Modifier + Wheel bindings:** Keep standard `Scroll Up/Down` + `Middle Click (M3)` mute, or bind actions to `Ctrl + Scroll`, `Alt + Scroll`, `Shift + Scroll`, `Super + Scroll`, `Right Click`, or extra mouse buttons (`M4`, `M5`, `M6–M9`) with configurable press-and-hold rapid repeat.
-- **Fast OSD dismiss & audio overdrive (`>100%`):** Shorten Dux Shell's native Volume/Brightness OSD popup timeout in clean `50 ms` steps (e.g., `850 ms` instead of `3000 ms`), hide the OSD popup completely for silent adjustments, or raise the maximum volume cap up to `150%` with accurate native OSD percentage display.
+- **Fast OSD dismiss & audio overdrive (`>100%`):** Shorten Dux Shell's native Volume/Brightness OSD popup timeout in clean `50 ms` steps (e.g., `850 ms` instead of `2000 ms`), hide the OSD popup completely for silent adjustments, or raise the maximum volume cap up to `150%` with accurate native OSD percentage display.
 
 ## Features
 

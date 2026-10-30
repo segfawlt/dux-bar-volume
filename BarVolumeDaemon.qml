@@ -156,6 +156,7 @@ Scope {
     property double lastWriteTimeMs: 0
     property double lastPluginOsdActionMs: 0
     property string lastPluginOsdKind: "volume"
+    property var savedOsdIntervals: []
     property var savedSinkMaxVolumes: ({})
 
     // Managed overlay instances across active bar surfaces
@@ -199,6 +200,10 @@ Scope {
 
     onOverrideMaxVolumeChanged: syncOverdriveMaxVolume()
     onCustomMaxVolumeChanged: syncOverdriveMaxVolume()
+    onShowOsdChanged: {
+        if (!showOsd)
+            restoreSavedOsdIntervals("", false);
+    }
 
     Timer {
         id: resyncTimer
@@ -260,7 +265,7 @@ Scope {
                 Qt.callLater(() => root.applyActiveOsdDuration("volume"));
                 osdDurationSyncTimer.restart();
             } else if ((Date.now() - root.lastPluginOsdActionMs) >= 800) {
-                root.restoreDefaultOsdDuration("volume");
+                root.restoreSavedOsdIntervals("volume", true);
             }
 
             if (root.writingVolume || root.pendingVolumeWrites.length === 0)
@@ -275,7 +280,7 @@ Scope {
                 Qt.callLater(() => root.applyActiveOsdDuration("volume"));
                 osdDurationSyncTimer.restart();
             } else if ((Date.now() - root.lastPluginOsdActionMs) >= 800) {
-                root.restoreDefaultOsdDuration("volume");
+                root.restoreSavedOsdIntervals("volume", true);
             }
         }
     }
@@ -287,7 +292,7 @@ Scope {
                 Qt.callLater(() => root.applyActiveOsdDuration("brightness"));
                 osdDurationSyncTimer.restart();
             } else if ((Date.now() - root.lastPluginOsdActionMs) >= 800) {
-                root.restoreDefaultOsdDuration("brightness");
+                root.restoreSavedOsdIntervals("brightness", true);
             }
         }
     }
@@ -353,6 +358,33 @@ Scope {
         return disabledBarTargets.indexOf(key) === -1;
     }
 
+    function recordOriginalOsdInterval(osd) {
+        if (!osd)
+            return;
+        const kept = [];
+        let found = false;
+        for (let i = 0; i < savedOsdIntervals.length; i++) {
+            const entry = savedOsdIntervals[i];
+            if (!entry || !entry.osd)
+                continue;
+            try {
+                void entry.osd.autoHideInterval;
+                kept.push(entry);
+                if (entry.osd === osd)
+                    found = true;
+            } catch (e) {}
+        }
+        if (!found) {
+            try {
+                kept.push({
+                    osd: osd,
+                    originalInterval: osd.autoHideInterval
+                });
+            } catch (e) {}
+        }
+        savedOsdIntervals = kept;
+    }
+
     function applyActiveOsdDuration(expectedKind) {
         if (!showOsd)
             return;
@@ -366,6 +398,7 @@ Scope {
                 ? osd.osdKind === expectedKind
                 : (osd.osdKind === "volume" || osd.osdKind === "brightness");
             if (kindMatch) {
+                recordOriginalOsdInterval(osd);
                 osd.autoHideInterval = customOsdDurationMs;
                 if (osd.shouldBeVisible && typeof osd.resetHideTimer === "function")
                     osd.resetHideTimer();
@@ -381,6 +414,7 @@ Scope {
         for (let i = 0; i < keys.length; i++) {
             const osd = map[keys[i]];
             if (osd && osd.osdKind === "volume") {
+                recordOriginalOsdInterval(osd);
                 osd.autoHideInterval = customOsdDurationMs;
                 if (typeof osd.show === "function")
                     osd.show();
@@ -390,19 +424,27 @@ Scope {
         }
     }
 
-    function restoreDefaultOsdDuration(onlyKind) {
-        const map = OSDManager.currentOSDsByScreen || {};
-        const screens = Object.keys(map);
-        for (let i = 0; i < screens.length; i++) {
-            const osd = map[screens[i]];
-            if (!osd)
+    function restoreSavedOsdIntervals(onlyKind, resetTimer) {
+        if (savedOsdIntervals.length === 0)
+            return;
+        const remaining = [];
+        for (let i = 0; i < savedOsdIntervals.length; i++) {
+            const entry = savedOsdIntervals[i];
+            if (!entry || !entry.osd)
                 continue;
-            const kindMatch = onlyKind
-                ? osd.osdKind === onlyKind
-                : (osd.osdKind === "volume" || osd.osdKind === "brightness");
-            if (kindMatch && osd.autoHideInterval !== 3000)
-                osd.autoHideInterval = 3000;
+            try {
+                const kind = entry.osd.osdKind;
+                const matches = !onlyKind || kind === onlyKind;
+                if (matches) {
+                    entry.osd.autoHideInterval = entry.originalInterval;
+                    if (resetTimer && entry.osd.shouldBeVisible && typeof entry.osd.resetHideTimer === "function")
+                        entry.osd.resetHideTimer();
+                } else {
+                    remaining.push(entry);
+                }
+            } catch (e) {}
         }
+        savedOsdIntervals = remaining;
     }
 
     function resolveBrightnessDevice(screenName) {
@@ -414,9 +456,17 @@ Scope {
             const screens = Quickshell.screens || [];
             const scr = screens.find(s => s.name === screenName);
             const pinKey = scr ? SettingsData.getScreenDisplayName(scr) : screenName;
-            const pinned = pinKey ? (CacheData.brightnessDevicePins || {})[pinKey] : "";
-            if (pinned && devs.some(d => d.id === pinned))
-                return pinned;
+            if (pinKey) {
+                const pinnedRaw = typeof BrightnessService.pinnedDevices === "function"
+                    ? BrightnessService.pinnedDevices(pinKey)
+                    : (CacheData.brightnessDevicePins || {})[pinKey];
+                const pinnedList = Array.isArray(pinnedRaw) ? pinnedRaw : (pinnedRaw ? [pinnedRaw] : []);
+                for (let i = 0; i < pinnedList.length; i++) {
+                    const pid = pinnedList[i];
+                    if (pid && devs.some(d => d.id === pid))
+                        return pid;
+                }
+            }
 
             if (BrightnessService.isInternalPanelName(screenName)) {
                 const internal = devs.find(d => d.class === "backlight")
@@ -438,7 +488,19 @@ Scope {
                 return ddcDevs[0].id;
         }
 
-        return BrightnessService.getPreferredDevice() || BrightnessService.getDefaultDevice();
+        if (typeof BrightnessService.getPreferredDevices === "function") {
+            const preferred = BrightnessService.getPreferredDevices();
+            if (Array.isArray(preferred) && preferred.length > 0 && preferred[0])
+                return preferred[0];
+        }
+        if (typeof BrightnessService.getPreferredDevice === "function") {
+            const preferredSingle = BrightnessService.getPreferredDevice();
+            if (preferredSingle)
+                return preferredSingle;
+        }
+        return typeof BrightnessService.getDefaultDevice === "function"
+            ? BrightnessService.getDefaultDevice()
+            : (devs[0]?.id ?? "");
     }
 
     function performBrightnessStep(dirSign, stepAmount, screenName) {
@@ -683,7 +745,7 @@ Scope {
     Component.onDestruction: {
         resyncTimer.stop();
         osdDurationSyncTimer.stop();
-        restoreDefaultOsdDuration("");
+        restoreSavedOsdIntervals("", false);
         restoreAllSavedSinkMaxVolumes();
         destroyAllOverlays();
         AudioService.removeRef();
