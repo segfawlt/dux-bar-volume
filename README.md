@@ -1,9 +1,10 @@
-# Bar Volume (`barVolume`)
-
+# Bar Volume Plugin for Dux Shell 
 A lightweight background daemon plugin for **[Dux Shell](https://duxlabs.dev)** (`dux-shell >= 2.0.0`) that turns your bar into an instant, customizable system audio and monitor brightness controller on hover — without adding extra bar widgets or stealing keyboard focus from your active window.
 
 ## Note
-Actively maintained and used daily with niri + Dux Shell. If you see long gaps between commits, it just means everything is working smoothly. PRs are very welcome! 
+This is the plugin I use daily, so it won't be abandoned. If you see long gaps between commits, it just means everything is working smoothly. PRs are very welcome! 
+
+Note: 100% code generated with AI. I always do 'quick' inspection though, but can't guarantee code quality (it won't be too bad honestly).
 ## Features
 
 - **Hover & Scroll Volume Control:** Hover anywhere over your bar (including auto-hiding bars, vertical bars, and Dux Island bars) and scroll up/down to adjust system-wide PipeWire volume (`AudioService`) with immediate first-notch response across compositors (`Niri`, `Hyprland`, `Sway`, `MangoWC`, `DWL`, `KWin`).
