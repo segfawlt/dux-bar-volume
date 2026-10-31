@@ -316,11 +316,11 @@ MouseArea {
         }
 
         let action = "";
-        if (InputBinding.matchesButton(daemon.toggleMuteBinding, mouse.button, mouse.modifiers)) {
+        if (InputBinding.matchesButton(daemon.toggleMuteBinding, mouse.button)) {
             action = "mute";
-        } else if (InputBinding.matchesButton(daemon.volumeUpBinding, mouse.button, mouse.modifiers)) {
+        } else if (InputBinding.matchesButton(daemon.volumeUpBinding, mouse.button)) {
             action = "up";
-        } else if (InputBinding.matchesButton(daemon.volumeDownBinding, mouse.button, mouse.modifiers)) {
+        } else if (InputBinding.matchesButton(daemon.volumeDownBinding, mouse.button)) {
             action = "down";
         }
 

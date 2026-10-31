@@ -673,9 +673,8 @@ PluginSettings {
                             }
 
                             mouse.accepted = true;
-                            const mods = InputBinding.cleanModifiers(mouse.modifiers);
 
-                            if (mouse.button === Qt.LeftButton && mods === 0) {
+                            if (mouse.button === Qt.LeftButton) {
                                 root.recordingKey = "";
                                 return;
                             }
@@ -683,7 +682,7 @@ PluginSettings {
                             bindRow.applyBinding({
                                 kind: "button",
                                 button: mouse.button,
-                                modifiers: mods
+                                modifiers: 0
                             });
                         }
 
@@ -697,15 +696,10 @@ PluginSettings {
                             if (!info)
                                 return;
 
-                            let capturedDir = info.dir;
-                            if ((info.modifiers & Qt.ShiftModifier) !== 0 && info.rawAngleY === 0 && info.rawAngleX !== 0) {
-                                capturedDir = info.rawAngleX > 0 ? "up" : "down";
-                            }
-
                             bindRow.applyBinding({
                                 kind: "wheel",
-                                dir: capturedDir,
-                                modifiers: info.modifiers
+                                dir: info.dir,
+                                modifiers: 0
                             });
                         }
                     }
@@ -1385,7 +1379,7 @@ PluginSettings {
     // =========================================================================
     SectionHeader {
         title: "Input Bindings"
-        subtitle: "Use the standard scroll + middle-click bindings, or customize mouse buttons and modifier combos"
+        subtitle: "Use the standard scroll + middle-click bindings, or customize scroll directions and mouse buttons"
     }
 
     ToggleSetting {

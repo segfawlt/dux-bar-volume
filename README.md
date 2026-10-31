@@ -19,7 +19,7 @@ Unlike widget-based volume or media plugins that only react over a small icon or
 - **Whole-bar volume scroll while keeping Media & Workspace scroll intact:** Scroll anywhere on empty bar space, clock, tray, or status pills to change system audio, while unchecking **Media** (to keep separate MPRIS per-player volume scroll) and/or **Workspace switcher** (to keep scrolling through workspaces).
 - **Dual-zone bar (Audio everywhere + Brightness on Control Center):** Hover anywhere on the bar to adjust speaker/headphone volume, and hover over the **Control Center** pill (or just its Brightness sub-icon) to adjust that specific monitor's brightness (`DDC/CI`, laptop backlight, or per-output software gamma).
 - **Multi-monitor & mixed-bar setups (DankBar + Dux Island):** Run one shared widget checklist across all displays, or toggle **Customize Checklist Per Bar** to configure your primary horizontal bar, secondary vertical sidebar, and **Dux Island** bar independently — or disable the plugin entirely on specific `Bar — Display` pairs.
-- **Mouse side buttons (`M4`/`M5`) or Modifier + Wheel bindings:** Keep standard `Scroll Up/Down` + `Middle Click (M3)` mute, or bind actions to `Ctrl + Scroll`, `Alt + Scroll`, `Shift + Scroll`, `Super + Scroll`, `Right Click`, or extra mouse buttons (`M4`, `M5`, `M6–M9`) with configurable press-and-hold rapid repeat.
+- **Mouse side buttons (`M4`/`M5`) or horizontal wheel bindings:** Keep standard `Scroll Up/Down` + `Middle Click (M3)` mute, or bind actions to horizontal scroll (`Scroll Left/Right`), `Right Click`, or extra mouse buttons (`M4`, `M5`, `M6–M9`) with configurable press-and-hold rapid repeat.
 - **Fast OSD dismiss & audio overdrive (`>100%`):** Shorten Dux Shell's native Volume/Brightness OSD popup timeout in clean `50 ms` steps (e.g., `850 ms` instead of `2000 ms`), hide the OSD popup completely for silent adjustments, or raise the maximum volume cap up to `150%` with accurate native OSD percentage display.
 
 ## Features
@@ -28,7 +28,7 @@ Unlike widget-based volume or media plugins that only react over a small icon or
 - **Middle click to mute**: Middle click over the bar to mute or unmute system audio.
 - **Control Center brightness**: Scroll over the Control Center bar widget to change monitor brightness (`DDC/CI`, laptop backlight, or software gamma), with Fitts's Law screen-corner hit-testing when Control Center sits at the end of the bar.
 - **Scroll area & widget checklist**: Live-fetched checklist of every active built-in and third-party plugin widget on your bars — uncheck individual widgets (such as **Media** or **Workspace switcher**) to keep their native scroll behavior, shared across bars or customized per bar.
-- **Custom input bindings**: Rebind volume up, volume down, and toggle mute to any mouse button (`M3`, `M4/M5`, `M6+`, right click), wheel direction, or modifier combination (`Ctrl`, `Alt`, `Shift`, `Super`), with optional press-and-hold repeat.
+- **Custom input bindings**: Rebind volume up, volume down, and toggle mute to any mouse button (`M3`, `M4/M5`, `M6–M9`, right click) or scroll direction (`Scroll Up/Down/Left/Right`), with optional press-and-hold repeat.
 - **Steps, touchpad & OSD**: Follow Dux Shell's volume step or set a custom step, enable optional two-finger touchpad scrolling, set a custom max volume cap (up to `150%`), and customize OSD popup duration (`50 ms` increments).
 - **Immediate first-notch wheel response**: Automatically compensates for compositor `mouseScrollFactor` scaling on `Niri`, `Hyprland`, and `MangoWC` while preserving standard `120`-unit wheel detents on `Sway`, `DWL`, `KWin`, and `Labwc`.
 - **Zero external dependencies**: Uses Dux Shell's in-process `AudioService`, `BrightnessService`, `BarWidgetService`, and `OSDManager` directly — no `pactl`, `wpctl`, `brightnessctl`, or background shell polling processes.
@@ -49,7 +49,7 @@ All options are available in **Dux Shell Settings → Plugins → Bar Volume Con
 | **Bar Coverage & Widget Checklist** | **Customize Checklist Per Bar** | `Off` | Share one widget checklist across all bars, or configure separate checklists per bar (`Main Bar`, `Bar 2`, etc.). |
 | | **Quick Presets & Live Checklist** | *All checked* | One-click presets (**Enable All**, **Keep Media & Workspaces Native**, **Uncheck All**) plus individual toggles for `Empty Bar Space`, `Dux Island`, and every live widget on your bar. |
 | **Bars & Displays** | **Enable on All Bars & Displays** | `On` | Automatically attaches to every active bar. Toggle off to enable/disable specific `Bar — Display` combinations. |
-| **Input Bindings & Hold** | **Use Default Bindings** | `On` | Uses `Scroll Up`, `Scroll Down`, and `Middle Click (M3)` mute. Toggle off for interactive mouse/wheel/modifier capture. |
+| **Input Bindings & Hold** | **Use Default Bindings** | `On` | Uses `Scroll Up`, `Scroll Down`, and `Middle Click (M3)` mute. Toggle off for interactive mouse button and scroll direction capture. |
 | | **Button Hold Mode & Timing** | `Step + hold` | Choose **Step on click + rapid repeat when held**, **Step click only**, or **Rapid repeat when held only**, with **Hold Detection Delay** (`100–1000 ms`, `50 ms` steps) and **Hold Repeat Interval** (`25–500 ms`, `25 ms` steps). |
 | **Mute & Feedback** | **Scrolling While Muted** | `Unmute on up` | Choose **Auto-unmute when increasing volume**, **Auto-unmute on any adjustment**, or **Keep muted (only adjust level)**. |
 | | **Show Volume OSD Popup** | `On` | Shows Dux Shell's native on-screen display for volume and brightness changes. |
@@ -92,7 +92,7 @@ dms ipc call plugins reload barVolume
 
 ## Configuration
 
-Open **Dux Shell Settings → Plugins → Bar Volume Control** to configure volume and brightness steps, per-bar widget checklists, target bars/displays, custom mouse/modifier bindings, and OSD popup timing. Changes take effect immediately.
+Open **Dux Shell Settings → Plugins → Bar Volume Control** to configure volume and brightness steps, per-bar widget checklists, target bars/displays, custom mouse/scroll bindings, and OSD popup timing. Changes take effect immediately.
 
 ## IPC Commands
 

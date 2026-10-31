@@ -1,6 +1,10 @@
 .pragma library
 
-const MODIFIER_MASK = Qt.ControlModifier | Qt.ShiftModifier | Qt.AltModifier | Qt.MetaModifier;
+// Note: Wayland layer-shell bars use WlrKeyboardFocus.None, so wl_pointer events
+// never carry live keyboard modifiers when another window is focused — and QtWayland
+// (QWaylandInputDevice::Keyboard::handleFocusLost) leaves stale XKB modifiers stuck
+// in mXkbState whenever a focused shell popup closes while Super/Alt/Ctrl/Shift is held.
+// Bindings therefore match purely by scroll direction or mouse button, ignoring modifiers.
 
 const DEFAULT_VOLUME_UP = Object.freeze({
     kind: "wheel",
@@ -25,10 +29,6 @@ const NONE_BINDING = Object.freeze({
     modifiers: 0
 });
 
-function cleanModifiers(mods) {
-    return (mods || 0) & MODIFIER_MASK;
-}
-
 function normalizeBinding(raw, fallback) {
     if (!raw || typeof raw !== "object" || typeof raw.kind !== "string")
         return fallback;
@@ -43,17 +43,17 @@ function normalizeBinding(raw, fallback) {
         return {
             kind: "wheel",
             dir: dir,
-            modifiers: cleanModifiers(raw.modifiers)
+            modifiers: 0
         };
     }
     if (raw.kind === "button") {
         const btn = Number(raw.button) || 0;
-        if (btn <= 0)
+        if (btn <= 0 || btn === Qt.LeftButton)
             return fallback;
         return {
             kind: "button",
             button: btn,
-            modifiers: cleanModifiers(raw.modifiers)
+            modifiers: 0
         };
     }
     return fallback;
@@ -69,8 +69,17 @@ function wheelDirectionAndDelta(wheel) {
     if (!wheel)
         return null;
     const usePixels = isTouchpadWheel(wheel);
-    const dx = usePixels && wheel.pixelDelta.x !== 0 ? wheel.pixelDelta.x : wheel.angleDelta.x;
-    const dy = usePixels && wheel.pixelDelta.y !== 0 ? wheel.pixelDelta.y : wheel.angleDelta.y;
+    // QtWayland's Pointer::flushScrollEvent() swaps X and Y deltas whenever Qt.AltModifier
+    // is set in mXkbState (including when Alt is stuck after a shortcut like Mod+Alt+L).
+    // Unswap so hardware vertical/horizontal scroll axes stay consistent.
+    const altSwapped = (wheel.modifiers & Qt.AltModifier) !== 0;
+    const pixelX = altSwapped ? wheel.pixelDelta.y : wheel.pixelDelta.x;
+    const pixelY = altSwapped ? wheel.pixelDelta.x : wheel.pixelDelta.y;
+    const angleX = altSwapped ? wheel.angleDelta.y : wheel.angleDelta.x;
+    const angleY = altSwapped ? wheel.angleDelta.x : wheel.angleDelta.y;
+
+    const dx = usePixels && pixelX !== 0 ? pixelX : angleX;
+    const dy = usePixels && pixelY !== 0 ? pixelY : angleY;
     if (dx === 0 && dy === 0)
         return null;
 
@@ -87,36 +96,22 @@ function wheelDirectionAndDelta(wheel) {
     return {
         dir: dir,
         delta: primaryDelta,
-        rawAngleX: wheel.angleDelta.x,
-        rawAngleY: wheel.angleDelta.y,
-        isTouchpad: usePixels,
-        modifiers: cleanModifiers(wheel.modifiers)
+        rawAngleX: angleX,
+        rawAngleY: angleY,
+        isTouchpad: usePixels
     };
 }
 
 function matchesWheel(binding, info) {
     if (!binding || binding.kind !== "wheel" || !info)
         return false;
-    if (cleanModifiers(binding.modifiers) !== info.modifiers)
-        return false;
-    if (binding.dir === info.dir)
-        return true;
-
-    // On Wayland/Qt, holding Shift with a vertical scroll wheel often translates
-    // vertical detents into angleDelta.x while angleDelta.y is 0.
-    if ((binding.modifiers & Qt.ShiftModifier) !== 0 && info.rawAngleY === 0 && info.rawAngleX !== 0) {
-        if (binding.dir === "up" && info.rawAngleX > 0)
-            return true;
-        if (binding.dir === "down" && info.rawAngleX < 0)
-            return true;
-    }
-    return false;
+    return binding.dir === info.dir;
 }
 
-function matchesButton(binding, button, modifiers) {
+function matchesButton(binding, button) {
     if (!binding || binding.kind !== "button")
         return false;
-    return binding.button === button && cleanModifiers(binding.modifiers) === cleanModifiers(modifiers);
+    return binding.button === button;
 }
 
 function acceptedButtonsMask(bindings) {
@@ -129,20 +124,6 @@ function acceptedButtonsMask(bindings) {
             mask |= b.button;
     }
     return mask;
-}
-
-function formatModifiers(mods) {
-    const clean = cleanModifiers(mods);
-    const parts = [];
-    if (clean & Qt.ControlModifier)
-        parts.push("Ctrl");
-    if (clean & Qt.AltModifier)
-        parts.push("Alt");
-    if (clean & Qt.ShiftModifier)
-        parts.push("Shift");
-    if (clean & Qt.MetaModifier)
-        parts.push("Super");
-    return parts.length > 0 ? parts.join(" + ") + " + " : "";
 }
 
 function buttonLabel(button) {
@@ -188,10 +169,9 @@ function wheelLabel(dir) {
 function formatBinding(binding) {
     if (!binding || binding.kind === "none")
         return "Disabled (None)";
-    const prefix = formatModifiers(binding.modifiers);
     if (binding.kind === "wheel")
-        return prefix + wheelLabel(binding.dir);
+        return wheelLabel(binding.dir);
     if (binding.kind === "button")
-        return prefix + buttonLabel(binding.button);
+        return buttonLabel(binding.button);
     return "Disabled (None)";
 }
