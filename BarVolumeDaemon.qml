@@ -170,30 +170,49 @@ Scope {
             return;
 
         if (overrideMaxVolume && customMaxVolume > 100) {
-            if (savedSinkMaxVolumes[sinkName] === undefined) {
+            const currentMax = SessionData.getDeviceMaxVolume(sinkName);
+            const existing = savedSinkMaxVolumes[sinkName];
+            if (currentMax < customMaxVolume) {
                 const nextSaved = Object.assign({}, savedSinkMaxVolumes);
-                nextSaved[sinkName] = SessionData.getDeviceMaxVolume(sinkName);
+                nextSaved[sinkName] = {
+                    prevMax: existing !== undefined ? existing.prevMax : currentMax,
+                    appliedMax: customMaxVolume
+                };
                 savedSinkMaxVolumes = nextSaved;
-            }
-            if (SessionData.getDeviceMaxVolume(sinkName) < customMaxVolume)
                 SessionData.setDeviceMaxVolume(sinkName, customMaxVolume);
+            } else if (existing !== undefined && existing.appliedMax === currentMax && customMaxVolume < currentMax) {
+                const targetMax = Math.max(existing.prevMax, customMaxVolume);
+                const nextSaved = Object.assign({}, savedSinkMaxVolumes);
+                if (targetMax > existing.prevMax) {
+                    nextSaved[sinkName] = {
+                        prevMax: existing.prevMax,
+                        appliedMax: targetMax
+                    };
+                } else {
+                    delete nextSaved[sinkName];
+                }
+                savedSinkMaxVolumes = nextSaved;
+                SessionData.setDeviceMaxVolume(sinkName, targetMax);
+            }
         } else if (savedSinkMaxVolumes[sinkName] !== undefined) {
-            const prevMax = savedSinkMaxVolumes[sinkName];
+            const entry = savedSinkMaxVolumes[sinkName];
             const nextSaved = Object.assign({}, savedSinkMaxVolumes);
             delete nextSaved[sinkName];
             savedSinkMaxVolumes = nextSaved;
-            SessionData.setDeviceMaxVolume(sinkName, prevMax);
+            if (entry && SessionData.getDeviceMaxVolume(sinkName) === entry.appliedMax)
+                SessionData.setDeviceMaxVolume(sinkName, entry.prevMax);
         }
     }
 
     function restoreAllSavedSinkMaxVolumes() {
-        if (typeof SessionData.setDeviceMaxVolume !== "function")
+        if (typeof SessionData.setDeviceMaxVolume !== "function" || typeof SessionData.getDeviceMaxVolume !== "function")
             return;
         const names = Object.keys(savedSinkMaxVolumes || {});
         for (let i = 0; i < names.length; i++) {
             const name = names[i];
-            if (savedSinkMaxVolumes[name] !== undefined)
-                SessionData.setDeviceMaxVolume(name, savedSinkMaxVolumes[name]);
+            const entry = savedSinkMaxVolumes[name];
+            if (entry && SessionData.getDeviceMaxVolume(name) === entry.appliedMax)
+                SessionData.setDeviceMaxVolume(name, entry.prevMax);
         }
         savedSinkMaxVolumes = {};
     }

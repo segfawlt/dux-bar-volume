@@ -2,7 +2,7 @@
   "id": "barVolume",
   "name": "Bar Volume Control",
   "description": "Control system volume and mute by scrolling or clicking over the bar, with Control Center brightness scroll, per-widget checklists, and optional max-volume and OSD timing overrides",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": "segfawlt",
   "license": "GPL-3.0",
   "type": "daemon",

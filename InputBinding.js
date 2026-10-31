@@ -1,5 +1,3 @@
-.pragma library
-
 // Note: Wayland layer-shell bars use WlrKeyboardFocus.None, so wl_pointer events
 // never carry live keyboard modifiers when another window is focused — and QtWayland
 // (QWaylandInputDevice::Keyboard::handleFocusLost) leaves stale XKB modifiers stuck

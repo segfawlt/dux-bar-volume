@@ -41,7 +41,7 @@ All options are available in **Dux Shell Settings → Plugins → Bar Volume Con
 | :--- | :--- | :--- | :--- |
 | **Volume Step & Limits** | **Use Dux Shell Volume Step** | `On` | Follows Dux Shell's global `AudioService.wheelVolumeStep`. Toggle off to set a custom step (`1%–25%`). |
 | | **Enable Touchpad Scrolling** | `Off` | Enables two-finger touchpad scrolling on the bar, revealing **Touchpad Volume Step** (`1%–15%`) and **Touchpad Scroll Distance** (`6–60 px`). |
-| | **Custom Max Volume Cap** | `Off` | Overrides device max volume limit (`50%–150%` in `5%` steps) and syncs overdrive (`>100%`) with `VolumeOSD`. |
+| | **Custom Max Volume Cap** | `Off` | Caps bar volume locally (`50%–100%`) or raises Dux Shell's active device max volume for overdrive (`>100%` up to `150%`). |
 | | **Reverse Scroll Direction** | `Off` | Inverts scroll up and scroll down directions. |
 | **Control Center Hover Brightness** | **Scroll Brightness on Control Center** | `On` | Scrolling over Control Center adjusts display brightness for that bar's monitor instead of volume. |
 | | **Control Center Brightness Target** | `Entire widget` | Choose **Entire Control Center widget**, **Entire Control Center (keep Mic icon for mic volume)**, or **Brightness icon only**. |

@@ -803,7 +803,7 @@ PluginSettings {
         visible: overrideMaxToggle.value
         settingKey: "customMaxVolume"
         label: "Maximum Volume Limit"
-        description: "Upper limit when increasing volume via the bar"
+        description: "Upper limit when increasing volume via the bar (above 100%, also raises Dux Shell's active device max volume)"
         defaultValue: 100
         minimum: 50
         maximum: 150
